@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">HomeStay</string>
+    <string name="choose_role">Select your account type:</string>
+    <string name="host">Host</string>
+    <string name="guest">Guest</string>
+    <string name="login">Login</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="submit">Submit</string>
+    <string name="sign_up">Sign Up</string>
 </resources>
