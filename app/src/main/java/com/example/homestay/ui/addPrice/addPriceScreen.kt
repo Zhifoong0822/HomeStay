@@ -113,7 +113,7 @@ fun AddPriceScreen(
                 label = { Text("Enter Price") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                placeholder = { Text("e.g. 25.50") },
+                placeholder = { Text("e.g. 25.00") },
                 leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth()
             )
