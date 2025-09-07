@@ -98,7 +98,7 @@ fun HomeScreen(
         ) {
             item {
                 Text(
-                    text = "Your registered homestays:",
+                    text = "Your registered homestays list:",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
