@@ -1,7 +1,11 @@
+
 plugins {
+    id ("kotlin-kapt")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
+
 }
 
 android {
@@ -37,10 +41,22 @@ android {
     buildFeatures {
         compose = true
     }
+
 }
-
 dependencies {
+    // Room
+    implementation("androidx.room:room-runtime:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    implementation ("androidx.lifecycle:lifecycle-livedata-ktx:2.8.6")
+    implementation( "androidx.compose.runtime:runtime-livedata:1.7.0")
+    // Firebase (use BOM)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics.ktx)
+    implementation(libs.firebase.firestore.ktx)
+    implementation(libs.firebase.auth.ktx)
 
+    // AndroidX + Compose
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -49,6 +65,15 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.navigation.compose.android)
+
+    // Lifecycle ViewModel for Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
+
+    // Material Icons
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -56,6 +81,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
-    implementation ("androidx.compose.material:material-icons-extended:<version>")
 }
+
+
+apply(plugin = "com.google.gms.google-services")
