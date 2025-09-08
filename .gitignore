@@ -14,3 +14,5 @@
 .cxx
 local.properties
 **/google-services.json
+# Ignore Android Studio run/debug configurations
+.idea/runConfigurations/
