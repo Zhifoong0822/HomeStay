@@ -1,6 +1,5 @@
 package com.example.homestay
 
-import AddPriceScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +17,8 @@ import com.example.homestay.data.local.HomestayDatabase
 import com.example.homestay.data.repository.FirebaseRepository
 import com.example.homestay.data.repository.HomestayRepository
 import com.example.homestay.data.repository.PropertyListingRepository
+import com.example.homestay.ui.HostHome.BookingHistoryScreen
+import com.example.homestay.ui.HostHome.BookingRequestsScreen
 import com.example.homestay.ui.HostHome.HomeWithDetailsViewModel
 import com.example.homestay.ui.HostHome.HomeScreen
 import com.example.homestay.ui.HostHome.HomeScreenWrapper
@@ -85,6 +86,8 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                             HomeScreenWrapper(homeVM = homeVM, navController = navController)
                         }
+                    composable("bookingRequests") { BookingRequestsScreen(navController) }
+                    composable("bookingHistory") { BookingHistoryScreen(navController) }
 
                     // --- Add Home ---
                     composable("addHome") {
@@ -113,23 +116,6 @@ class MainActivity : ComponentActivity() {
                             navController = navController
                         )
                     }
-
-                    composable(
-                        route = "addPrice/{homeId}",
-                        arguments = listOf(navArgument("homeId") { type = NavType.StringType })
-                    ) { backStackEntry ->
-                        val homeId = backStackEntry.arguments?.getString("homeId") ?: ""
-
-                        AddPriceScreen(
-                            homeId = homeId,           // pass the home ID
-                            homeVM = homeVM,           // pass the existing HomeWithDetailsViewModel
-                            onBackClick = { navController.popBackStack() },
-                            onProfileClick = { /* navigate to profile */ },
-                            onSaveClick = { navController.navigate("home") }
-                        )
-                    }
-
-
                     // --- Add Promo Screen ---
                     composable(
                         route = "addPromo/{homeId}/{homeName}",

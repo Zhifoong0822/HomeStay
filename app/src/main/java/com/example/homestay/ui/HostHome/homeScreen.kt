@@ -2,7 +2,8 @@ package com.example.homestay.ui.HostHome
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -25,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.homestay.data.model.HomeWithDetails
 import java.net.URLEncoder
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.lazy.grid.items
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +47,11 @@ fun HomeScreen(
         ?.getLiveData<String>("snackbar_message")
         ?.observeAsState()
 
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+
+    val columns = if (screenWidth < 700) 1 else 2
+
     LaunchedEffect(snackbarMessage?.value) {
         snackbarMessage?.value?.let { message ->
             snackbarHostState.showSnackbar(message)
@@ -51,7 +60,6 @@ fun HomeScreen(
                 ?.remove<String>("snackbar_message")
         }
     }
-
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -65,14 +73,9 @@ fun HomeScreen(
                             containerColor = Color(0xFF446F5C),
                             contentColor = Color.White
                         ),
-                        shape = RoundedCornerShape(50),
-                        elevation = ButtonDefaults.buttonElevation(2.dp)
+                        shape = RoundedCornerShape(50)
                     ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Profile",
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(Icons.Default.Person, contentDescription = "Profile", modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Profile", fontWeight = FontWeight.Medium)
                     }
@@ -89,33 +92,46 @@ fun HomeScreen(
             )
         },
         containerColor = Color(0xFFFEF9F3),
+        bottomBar = {
+            HostBottomBar(navController)
+            }
     ) { padding ->
-        LazyColumn(
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
                 .padding(padding)
         ) {
-            item {
-                Text(
-                    text = "Your registered homestays list:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
-                )
-            }
+            Text(
+                text = "Your registered homestays:",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+            )
 
-            items(homestays) { homestay ->
-                HomestayCard(
-                    homestay = homestay,
-                    onEditClick = { onEditClick(homestay) },
-                    onDeleteClick = { onDeleteClick(homestay) },
-                    onAddPromoClick = { onAddPromoClick(homestay) }
-                )
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(homestays) { homestay ->
+                    HomestayCard(
+                        homestay = homestay,
+                        onEditClick = { onEditClick(homestay) },
+                        onDeleteClick = { onDeleteClick(homestay) },
+                        onAddPromoClick = { onAddPromoClick(homestay) }
+                    )
+                }
             }
         }
     }
 }
+
+
 
 @Composable
 fun HomestayCard(
@@ -128,104 +144,80 @@ fun HomestayCard(
 
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .fillMaxWidth() // fills the grid column
+            .wrapContentHeight() // height adapts to content
+            .padding(8.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // --- Title & Actions ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = homestay.baseInfo.name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)  // Text takes all remaining space
+                        .padding(end = 8.dp)
                 )
 
                 Row {
                     OutlinedButton(
                         onClick = onEditClick,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF446F5C)),
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.wrapContentWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit"
-                        )
+                        Icon(Icons.Default.Edit, contentDescription = "Edit")
                         Spacer(Modifier.width(4.dp))
                         Text("Edit")
                     }
 
+                    Spacer(Modifier.width(4.dp)) // spacing between buttons
+
                     OutlinedButton(
                         onClick = { showDeleteDialog = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                        modifier = Modifier.wrapContentWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete"
-                        )
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
                         Spacer(Modifier.width(4.dp))
                         Text("Delete")
                     }
                 }
             }
 
+
             Spacer(Modifier.height(6.dp))
 
             // --- Location ---
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Place,
-                    contentDescription = "Location",
-                    tint = Color(0xFF446F5C),
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.Place, contentDescription = "Location", tint = Color(0xFF446F5C), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Location: ${homestay.baseInfo.location}",
-                    color = Color(0xFF446F5C),
-                    fontWeight = FontWeight.Medium
-                )
+                Text("Location: ${homestay.baseInfo.location}", color = Color(0xFF446F5C), fontWeight = FontWeight.Medium)
             }
 
             Spacer(Modifier.height(4.dp))
 
             // --- Description ---
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = "Description",
-                    tint = Color.DarkGray,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.Info, contentDescription = "Description", tint = Color.DarkGray, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Description: ${homestay.baseInfo.description}",
-                    color = Color.DarkGray
-                )
+                Text("Description: ${homestay.baseInfo.description}", color = Color.DarkGray)
             }
 
             Spacer(Modifier.height(4.dp))
 
             // --- Price ---
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.AttachMoney,
-                    contentDescription = "Price",
-                    tint = Color(0xFF446F5C),
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.AttachMoney, contentDescription = "Price", tint = Color(0xFF446F5C), modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (homestay.price != null)
-                        "Price: RM ${homestay.price} / night"
-                    else
-                        "Price: Not set yet",
+                    text = if (homestay.price != null) "Price: RM ${homestay.price} / night" else "Price: Not set yet",
                     color = Color(0xFF446F5C),
                     fontWeight = FontWeight.Medium
                 )
@@ -235,18 +227,10 @@ fun HomestayCard(
 
             // --- Promotion ---
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = "Promotion",
-                    tint = if (homestay.promotion != null) Color(0xFF446F5C) else Color.Gray,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.Star, contentDescription = "Promotion", tint = if (homestay.promotion != null) Color(0xFF446F5C) else Color.Gray, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (homestay.promotion != null)
-                        "Promotion: ${homestay.promotion.description} (${homestay.promotion.discountPercent}% OFF)"
-                    else
-                        "No promotions yet",
+                    text = if (homestay.promotion != null) "Promotion: ${homestay.promotion.description} (${homestay.promotion.discountPercent}% OFF)" else "No promotions yet",
                     color = if (homestay.promotion != null) Color(0xFF446F5C) else Color.Gray,
                     fontWeight = if (homestay.promotion != null) FontWeight.Medium else FontWeight.Normal
                 )
@@ -289,6 +273,7 @@ fun HomestayCard(
         )
     }
 }
+
 
 @Composable
 fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavController) {
