@@ -197,19 +197,43 @@
                         if (promotion == null) {
                             Text("No Promotion Yet", modifier = Modifier.padding(top = 8.dp))
                         } else {
+                            var showDialog by remember { mutableStateOf(false) }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(vertical = 4.dp)
                             ) {
                                 Text("${promotion.description} - ${promotion.discountPercent}% OFF")
                                 Spacer(Modifier.width(8.dp))
-                                IconButton(onClick = { homeVM.deletePromotion(promotion) }) {
+                                IconButton(onClick = { showDialog = true }) {
                                     Icon(
                                         Icons.Default.Delete,
                                         contentDescription = "Delete Promo",
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                 }
+                            }
+                            if (showDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showDialog = false },
+                                    title = { Text("Delete Promotion") },
+                                    text = { Text("Are you sure you want to delete this promotion?") },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            homeVM.deletePromotion(promotion)
+                                            navController.currentBackStackEntry
+                                                ?.savedStateHandle
+                                                ?.set("snackbar_message", "Promotion deleted")
+                                            showDialog = false
+                                        }) {
+                                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showDialog = false }) {
+                                            Text("Cancel")
+                                        }
+                                    }
+                                )
                             }
                         }
 
