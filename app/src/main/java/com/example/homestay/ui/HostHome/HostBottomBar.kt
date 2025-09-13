@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.runtime.getValue
+import com.example.homestay.HomeStayScreen
 
 
 @Composable
@@ -36,10 +37,10 @@ fun HostBottomBar(navController: NavController) {
             label = { Text("Booking Requests") }
         )
         NavigationBarItem(
-            selected = currentRoute == "home",
+            selected = currentRoute == HomeStayScreen.HostHome.name,
             onClick = {
-                if (currentRoute != "home") {
-                    navController.navigate("home") {
+                if (currentRoute != HomeStayScreen.HostHome.name) {
+                    navController.navigate(HomeStayScreen.HostHome.name) {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true

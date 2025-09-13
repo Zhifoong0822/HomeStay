@@ -46,10 +46,14 @@ android {
 dependencies {
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
+    implementation(libs.androidx.material3.window.size.class1.android)
+    implementation(libs.androidx.benchmark.traceprocessor.android)
     kapt("androidx.room:room-compiler:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation ("androidx.lifecycle:lifecycle-livedata-ktx:2.8.6")
     implementation( "androidx.compose.runtime:runtime-livedata:1.7.0")
+    implementation( "androidx.datastore:datastore-preferences:1.1.0")
+
     // Firebase (use BOM)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics.ktx)

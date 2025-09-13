@@ -28,6 +28,7 @@ import com.example.homestay.data.model.HomeWithDetails
 import java.net.URLEncoder
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.grid.items
+import com.example.homestay.HomeStayScreen
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -287,7 +288,7 @@ fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavContro
 
     HomeScreen(
         homestays = homes,
-        onProfileClick = { /* navigate to profile */ },
+        onProfileClick = { navController.navigate(HomeStayScreen.Profile.name) },
         onAddHomeClick = { navController.navigate("addHome") },
         onEditClick = { homestay -> navController.navigate("editHome/${homestay.id}") },
         onDeleteClick = { homestay ->
