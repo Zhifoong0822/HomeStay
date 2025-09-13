@@ -62,7 +62,7 @@ fun LogoScreen(isTablet: Boolean,
             Spacer(modifier = Modifier.height(60.dp))
 
             Text(
-                text = "Welcome to SKYBNB",
+                text = "Welcome to SKYBNB!",
                 modifier = modifier.padding(horizontal = 20.dp),
                 fontSize = titleFontSize,
                 fontWeight = FontWeight.ExtraBold,
