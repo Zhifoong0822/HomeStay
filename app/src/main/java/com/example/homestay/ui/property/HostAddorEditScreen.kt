@@ -195,6 +195,9 @@
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF446F5C)
                         )
+
+                        var showDeleteDialog by remember { mutableStateOf(false) }
+
                         if (promotion == null) {
                             Text("No Promotion Yet", modifier = Modifier.padding(top = 8.dp))
                         } else {
@@ -204,13 +207,34 @@
                             ) {
                                 Text("${promotion.description} - ${promotion.discountPercent}% OFF")
                                 Spacer(Modifier.width(8.dp))
-                                IconButton(onClick = { homeVM.deletePromotion(promotion) }) {
+                                IconButton(onClick = { showDeleteDialog = true }) {
                                     Icon(
                                         Icons.Default.Delete,
                                         contentDescription = "Delete Promo",
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                 }
+                            }
+
+                            if (showDeleteDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteDialog = false },
+                                    title = { Text("Delete Promotion") },
+                                    text = { Text("Are you sure you want to delete this promotion?") },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                homeVM.deletePromotion(promotion)
+                                                showDeleteDialog = false
+                                            }
+                                        ) { Text("Yes", color = MaterialTheme.colorScheme.error) }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showDeleteDialog = false }) {
+                                            Text("Cancel")
+                                        }
+                                    }
+                                )
                             }
                         }
 
