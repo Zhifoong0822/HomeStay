@@ -15,6 +15,7 @@
     import androidx.compose.material.icons.filled.Save
     import androidx.compose.material3.*
     import androidx.compose.runtime.*
+    import androidx.compose.runtime.saveable.rememberSaveable
     import androidx.compose.ui.Alignment
     import androidx.compose.ui.Modifier
     import androidx.compose.ui.graphics.Color
@@ -48,10 +49,10 @@
         val homes by homeVM.homesWithDetails.collectAsState()
         val homeDetails = homeId?.let { id -> homes.firstOrNull { it.id == id } }
 
-        var name by remember(homeDetails) { mutableStateOf(homeDetails?.baseInfo?.name ?: "") }
-        var location by remember(homeDetails) { mutableStateOf(homeDetails?.baseInfo?.location ?: "") }
-        var description by remember(homeDetails) { mutableStateOf(homeDetails?.baseInfo?.description ?: "") }
-        var localPrice by remember { mutableStateOf(homeDetails?.price?.toString() ?: "") }
+        var name by rememberSaveable(homeDetails) { mutableStateOf(homeDetails?.baseInfo?.name ?: "") }
+        var location by rememberSaveable(homeDetails) { mutableStateOf(homeDetails?.baseInfo?.location ?: "") }
+        var description by rememberSaveable(homeDetails) { mutableStateOf(homeDetails?.baseInfo?.description ?: "") }
+        var localPrice by rememberSaveable(homeDetails) { mutableStateOf(homeDetails?.price?.toString() ?: "") }
 
         LaunchedEffect(homeDetails?.price) {
             localPrice = homeDetails?.price?.toString() ?: ""
