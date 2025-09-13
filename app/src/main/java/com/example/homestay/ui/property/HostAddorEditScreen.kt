@@ -201,12 +201,14 @@
                         if (promotion == null) {
                             Text("No Promotion Yet", modifier = Modifier.padding(top = 8.dp))
                         } else {
+                            var showDialog by remember { mutableStateOf(false) }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(vertical = 4.dp)
                             ) {
                                 Text("${promotion.description} - ${promotion.discountPercent}% OFF")
                                 Spacer(Modifier.width(8.dp))
+
                                 IconButton(onClick = { showDeleteDialog = true }) {
                                     Icon(
                                         Icons.Default.Delete,
@@ -215,6 +217,7 @@
                                     )
                                 }
                             }
+
 
                             if (showDeleteDialog) {
                                 AlertDialog(
@@ -231,6 +234,8 @@
                                     },
                                     dismissButton = {
                                         TextButton(onClick = { showDeleteDialog = false }) {
+
+
                                             Text("Cancel")
                                         }
                                     }
