@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -70,9 +71,17 @@ fun AddPromoScreen(
         .firstOrNull { it.id == homeId }
         ?.promotion
 
-    var description by remember { mutableStateOf(existingPromo?.description ?: "") }
-    var discount by remember { mutableStateOf(existingPromo?.discountPercent?.toString() ?: "") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var description by rememberSaveable(existingPromo) {
+        mutableStateOf(existingPromo?.description ?: "")
+    }
+
+    var discount by rememberSaveable(existingPromo) {
+        mutableStateOf(existingPromo?.discountPercent?.toString() ?: "")
+    }
+
+    var errorMessage by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
 
 
     Scaffold(
