@@ -47,6 +47,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
+import com.example.homestay.ui.client.ClientBrowseScreen
 
 enum class HomeStayScreen {
     Logo,
@@ -329,7 +330,18 @@ fun HomeStayApp(
                 }
             }
 
-            //Profile
+            //user screen
+            composable("clientBrowse") {
+                ClientBrowseScreen(
+                    vm = propertyVM,
+                    onProfileClick = { navController.navigate("clientProfile") },
+                    onBottomHome = { navController.navigate("clientBrowse") },
+                    onBottomExplore = { /* current */ },
+                    onBottomSettings = { navController.navigate("clientSettings") }
+                )
+            }
+
+            //Profile 
             composable(route = HomeStayScreen.Profile.name) {
                 when (windowSizeClass.widthSizeClass) {
                     WindowWidthSizeClass.Compact -> {
@@ -355,7 +367,15 @@ fun HomeStayApp(
                     }
                 }
             }
-
+            composable("clientBrowse") {
+                ClientBrowseScreen(
+                    vm = propertyVM,
+                    onProfileClick = { navController.navigate("clientProfile") },
+                    onBottomHome = { navController.navigate("clientBrowse") },
+                    onBottomExplore = { /* current */ },
+                    onBottomSettings = { navController.navigate("clientSettings") }
+                )
+            }
             //Edit Profile
             composable(route = HomeStayScreen.EditProfile.name) {
                 when (windowSizeClass.widthSizeClass) {
