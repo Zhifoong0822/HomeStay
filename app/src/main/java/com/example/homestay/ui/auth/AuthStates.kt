@@ -29,7 +29,7 @@ data class SignUpState(
     val username: String = "",
     val gender: String = "",
     val birthdate: String = "",
-    val role: String = "Guest",
+    val role: String = "",
     val emailError: String? = null,
     val passwordError: String? = null,
     val confirmPasswordError: String? = null,
