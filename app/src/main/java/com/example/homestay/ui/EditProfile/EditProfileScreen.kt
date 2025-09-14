@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.sp
 import com.example.homestay.AuthViewModel
 import com.example.homestay.R
 import com.example.homestay.UserProfile
-import kotlinx.coroutines.delay
 import java.util.Calendar
 
 @Composable

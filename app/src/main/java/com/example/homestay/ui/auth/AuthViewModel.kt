@@ -152,11 +152,16 @@ class AuthViewModel(
                         if (uid != null) {
                             loadUserProfile(uid) // Firebase profile
 
-                            // --- ROOM DB INSERT AFTER LOGIN ---
+                            //ROOM DB INSERT AFTER LOGIN
                             result.data?.let { firebaseUser ->
                                 val db = UserDatabase.getDatabase(context)
                                 val userDao = db.userDao()
                                 viewModelScope.launch(Dispatchers.IO) {
+                                    val safeRole = _signUpState.value.role
+                                    if (safeRole.isBlank()) {
+                                        Log.e("AuthViewModel", "Skipping Room insert - role is empty")
+                                        return@launch
+                                    }
                                     val userEntity = UserEntity(
                                         userId = firebaseUser.uid,
                                         email = firebaseUser.email ?: "",
@@ -164,7 +169,7 @@ class AuthViewModel(
                                         username = _loginState.value.email, // fallback username
                                         gender = "",
                                         birthdate = "",
-                                        role = _signUpState.value.role,
+                                        role = safeRole,
                                         createdAt = System.currentTimeMillis(),
                                         updatedAt = System.currentTimeMillis()
                                     )
@@ -282,29 +287,68 @@ class AuthViewModel(
         val username = _signUpState.value.username.trim()
         val gender = _signUpState.value.gender.trim()
         val birthdate = _signUpState.value.birthdate.trim()
+        val role = _signUpState.value.role
 
         var isValid = true
+
+        // Validate email
         if (email.isEmpty()) {
             _signUpState.value = _signUpState.value.copy(emailError = "Email cannot be empty")
             isValid = false
-        }
-        if (password.isEmpty()) {
-            _signUpState.value = _signUpState.value.copy(passwordError = "Password cannot be empty")
+        } else if (!authRepository.isValidEmail(email)) {
+            _signUpState.value = _signUpState.value.copy(emailError = "Please enter a valid email address")
             isValid = false
         }
-        if (confirmPassword.isEmpty()) {
-            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Confirm password cannot be empty")
-            isValid = false
-        }
-        if (password != confirmPassword) {
-            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Passwords do not match")
-            isValid = false
-        }
+
+        // Validate username
         if (username.isEmpty()) {
             _signUpState.value = _signUpState.value.copy(usernameError = "Username cannot be empty")
             isValid = false
+        } else if (username.length < 3) {
+            _signUpState.value = _signUpState.value.copy(usernameError = "Username must be at least 3 characters")
+            isValid = false
         }
-        if (!isValid) return
+
+        // Validate password
+        if (password.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(passwordError = "Password cannot be empty")
+            isValid = false
+        } else if (password.length < 6) {
+            _signUpState.value = _signUpState.value.copy(passwordError = "Password must be at least 6 characters")
+            isValid = false
+        }
+
+        // Validate confirm password
+        if (confirmPassword.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Confirm password cannot be empty")
+            isValid = false
+        } else if (password != confirmPassword) {
+            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Passwords do not match")
+            isValid = false
+        }
+
+        // Validate gender
+        if (gender.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(errorMessage = "Please select a gender")
+            isValid = false
+        }
+
+        // Validate birthdate
+        if (birthdate.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(errorMessage = "Please select your birthdate")
+            isValid = false
+        }
+
+        // Validate role
+        if (role.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(errorMessage = "Please select a role (Guest or Host)")
+            isValid = false
+        }
+
+        if (!isValid) {
+            Log.d("AuthViewModel", "Validation failed - not proceeding with signup")
+            return
+        }
 
         val request = SignUpRequest(
             email = email,
@@ -312,7 +356,7 @@ class AuthViewModel(
             username = username,
             gender = gender,
             birthdate = birthdate,
-            role = _signUpState.value.role
+            role = role
         )
 
         viewModelScope.launch {
@@ -333,11 +377,15 @@ class AuthViewModel(
                         //set shouldClearForm = true
                         markLoginFormForClearing()
 
-                        // Room DB insertion...
+                        //Room DB insertion
                         result.data?.let { firebaseUser ->
                             val db = UserDatabase.getDatabase(context)
                             val userDao = db.userDao()
                             viewModelScope.launch(Dispatchers.IO) {
+                                if (role.isBlank()) {
+                                    Log.e("AuthViewModel", "Skipping Room insert - role is empty")
+                                    return@launch
+                                }
                                 val userEntity = UserEntity(
                                     userId = firebaseUser.uid,
                                     email = firebaseUser.email ?: "",
@@ -345,7 +393,7 @@ class AuthViewModel(
                                     username = username,
                                     gender = gender,
                                     birthdate = birthdate,
-                                    role = _signUpState.value.role,
+                                    role = role,
                                     createdAt = System.currentTimeMillis(),
                                     updatedAt = System.currentTimeMillis()
                                 )
@@ -759,7 +807,7 @@ class AuthViewModel(
                 username = "",
                 gender = "",
                 birthdate = "",
-                role = "guest",
+                role = "",
                 emailError = null,
                 passwordError = null,
                 confirmPasswordError = null,

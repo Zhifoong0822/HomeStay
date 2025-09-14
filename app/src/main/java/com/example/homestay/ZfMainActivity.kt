@@ -400,14 +400,16 @@ fun HomeStayApp(
             }
         }
 
-        LaunchedEffect(isLoggedIn, uiState.userProfile) {
-            if (isLoggedIn && uiState.userProfile != null) {
-                navController.navigate(HomeStayScreen.HostHome.name) {
-                    popUpTo(0) { inclusive = true } // clear backstack
+        LaunchedEffect(isLoggedIn) {
+            if (isLoggedIn) {
+                if (uiState.userProfile != null) {
+                    navController.navigate(HomeStayScreen.HostHome.name) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
-            } else if (!isLoggedIn) {
+            } else {
                 navController.navigate(HomeStayScreen.Logo.name) {
-                    popUpTo(0) { inclusive = true } // clear backstack
+                    popUpTo(0) { inclusive = true }
                 }
             }
         }
