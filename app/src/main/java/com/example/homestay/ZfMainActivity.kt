@@ -341,7 +341,7 @@ fun HomeStayApp(
                 )
             }
 
-            //Profile
+            //Profile 
             composable(route = HomeStayScreen.Profile.name) {
                 when (windowSizeClass.widthSizeClass) {
                     WindowWidthSizeClass.Compact -> {
