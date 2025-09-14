@@ -21,7 +21,7 @@ import com.example.homestay.ui.property.PropertyListingViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientBrowseScreen(
-    vm: PropertyListingViewModel,
+    vm: PropertyListingViewModel, 
     onProfileClick: () -> Unit,
     onBottomHome: () -> Unit,
     onBottomExplore: () -> Unit,  //current screen
