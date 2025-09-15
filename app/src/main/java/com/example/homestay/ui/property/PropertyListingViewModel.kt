@@ -1,5 +1,6 @@
 package com.example.homestay.ui.property
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,62 +11,122 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import java.util.UUID
-import kotlin.collections.sortedBy
 
 class PropertyListingViewModel(
     private val repo: PropertyListingRepository,
-    private val savedState: SavedStateHandle
+    private val handle: SavedStateHandle
 ) : ViewModel() {
 
+    private object Keys {
+        const val NAME = "draftName"
+        const val LOCATION = "draftLocation"
+        const val DESC = "draftDesc"
+        const val DESCRIPTION = "draftDescription"
+        const val PHOTO_URIS = "draftPhotoUris" // ArrayList<String>
+    }
+
+    /** Local + cloud homes (sorted by name) */
     val homes: StateFlow<List<Home>> = repo.homes
-        .map { it.sortedBy { h -> h.name.lowercase() } }
+        .map { list -> list.sortedBy { it.name.lowercase() } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // persist form fields across rotation
+    val homesCloud: StateFlow<List<Home>> = repo.homesFromCloud()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Draft fields persisted via SavedStateHandle */
     var draftName: String
-        get() = savedState["draftName"] ?: ""
-        set(v) { savedState["draftName"] = v }
+        get() = handle[Keys.NAME] ?: ""
+        set(v) { handle[Keys.NAME] = v }
 
     var draftLocation: String
-        get() = savedState["draftLocation"] ?: ""
-        set(v) { savedState["draftLocation"] = v }
+        get() = handle[Keys.LOCATION] ?: ""
+        set(v) { handle[Keys.LOCATION] = v }
 
     var draftDesc: String
-        get() = savedState["draftDesc"] ?: ""
-        set(v) { savedState["draftDesc"] = v }
+        get() = handle[Keys.DESC] ?: ""
+        set(v) { handle[Keys.DESC] = v }
+
+    var draftDescription: String
+        get() = handle[Keys.DESCRIPTION] ?: ""
+        set(v) { handle[Keys.DESCRIPTION] = v }
+
+    /**
+     * Photo URIs: keep a Compose-friendly list in memory,
+     * but persist ArrayList<String> in SavedStateHandle.
+     */
+    val draftPhotoUris: SnapshotStateList<String> = run {
+        val saved: ArrayList<String> = handle[Keys.PHOTO_URIS] ?: arrayListOf()
+        mutableStateListOf<String>().apply { addAll(saved) }
+    }
+
+    fun setDraftPhotoUris(newUris: List<String>) {
+        draftPhotoUris.apply {
+            clear()
+            addAll(newUris)
+        }
+        handle[Keys.PHOTO_URIS] = ArrayList(draftPhotoUris) // Bundle-safe
+    }
+
+    fun appendDraftPhotoUris(extra: List<String>) =
+        setDraftPhotoUris(draftPhotoUris + extra)
+
+    fun removeDraftPhotoUriAt(index: Int) {
+        if (index in 0 until draftPhotoUris.size) {
+            draftPhotoUris.removeAt(index)
+            handle[Keys.PHOTO_URIS] = ArrayList(draftPhotoUris)
+        }
+    }
 
     fun loadDraftFrom(home: Home) {
         draftName = home.name
         draftLocation = home.location
         draftDesc = home.description
+        // Photos are cloud-only for now; keep as-is unless you load them.
     }
 
     fun clearDraft() {
-        draftName = ""; draftLocation = ""; draftDesc = ""
+        draftName = ""
+        draftLocation = ""
+        draftDesc = ""
+        draftDescription = ""
+        draftPhotoUris.clear()
+        handle[Keys.PHOTO_URIS] = arrayListOf<String>()
     }
 
-    // ---- Host ----
+    // ---- Host (local DB) ----
     fun addHome(onDone: () -> Unit) = viewModelScope.launch {
         repo.addHome(Home(name = draftName, location = draftLocation, description = draftDesc))
         clearDraft()
         onDone()
     }
 
-
     fun addHomeWithId(onDone: (newId: String) -> Unit) = viewModelScope.launch {
         val newId = UUID.randomUUID().toString()
-        val home = Home(
-            id = newId,
-            name = draftName,
-            location = draftLocation,
-            description = draftDesc
+        repo.addHome(
+            Home(
+                id = newId,
+                name = draftName,
+                location = draftLocation,
+                description = draftDesc
+            )
         )
-        repo.addHome(home)
         clearDraft()
         onDone(newId)
     }
 
+    // ---- Host (cloud) ----
+    fun addHomeToCloud(photoUris: List<Uri>, onDone: () -> Unit) {
+        val name = draftName
+        val loc = draftLocation
+        val desc = draftDesc
+        viewModelScope.launch {
+            repo.addHomeToCloud(name, loc, desc, photoUris)
+            onDone()
+        }
+    }
 
     fun updateHome(
         id: String,
@@ -75,11 +136,7 @@ class PropertyListingViewModel(
         onDone: () -> Unit
     ) = viewModelScope.launch {
         val current = homes.value.firstOrNull { it.id == id } ?: return@launch
-        repo.updateHome(current.copy(
-            name = name,
-            location = location,
-            description = description
-        ))
+        repo.updateHome(current.copy(name = name, location = location, description = description))
         onDone()
     }
 

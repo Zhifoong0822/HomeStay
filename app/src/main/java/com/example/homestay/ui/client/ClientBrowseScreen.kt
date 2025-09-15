@@ -3,6 +3,9 @@ package com.example.homestay.ui.client
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
@@ -15,8 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.homestay.data.model.Home
 import com.example.homestay.ui.property.PropertyListingViewModel
+import com.example.homestay.ui.common.isTablet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,15 +29,16 @@ fun ClientBrowseScreen(
     vm: PropertyListingViewModel,
     onProfileClick: () -> Unit,
     onBottomHome: () -> Unit,
-    onBottomExplore: () -> Unit,  //current screen
+    onBottomExplore: () -> Unit,  // current screen
     onBottomSettings: () -> Unit,
 ) {
-    val homes by vm.homes.collectAsState()
+    val homes by vm.homesCloud.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
     val filtered = remember(homes, query) {
         if (query.isBlank()) homes
         else homes.filter { it.name.contains(query, ignoreCase = true) }
     }
+    val tablet = isTablet()
 
     Scaffold(
         topBar = {
@@ -88,15 +94,34 @@ fun ClientBrowseScreen(
                     Text("No properties found.")
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(filtered, key = { it.id }) { home ->
-                        ClientHomeCard(home)
+                if (!tablet) {
+                    // PHONE: vertical list
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filtered, key = { it.id }) { home ->
+                            ClientHomeCard(home)
+                        }
+                    }
+                } else {
+                    // TABLET: adaptive grid (nice cards in columns)
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 320.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp)
+                    ) {
+                        items(filtered, key = { it.id }) { home ->
+                            ClientHomeCard(home)
+                        }
                     }
                 }
             }
@@ -106,16 +131,28 @@ fun ClientBrowseScreen(
 
 @Composable
 private fun ClientHomeCard(home: Home) {
-    Card {
-        Column(Modifier.padding(16.dp)) {
-            Text(home.name, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(home.location, style = MaterialTheme.typography.bodyMedium)
-            if (home.description.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
-                Text(home.description, style = MaterialTheme.typography.bodySmall)
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = home.imageUrls.firstOrNull(),
+                contentDescription = home.name,
+                modifier = Modifier.size(72.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(home.name, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(home.location, style = MaterialTheme.typography.bodyMedium)
+                if (home.description.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(home.description, style = MaterialTheme.typography.bodySmall)
+                }
             }
-            // Read-only: no edit/delete/booking here
         }
     }
 }

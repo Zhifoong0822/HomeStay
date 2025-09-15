@@ -13,6 +13,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.net.Uri
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
 
 class PropertyListingRepository(
@@ -47,6 +55,53 @@ class PropertyListingRepository(
     suspend fun removeHome(id: String) {
         homeDao.deleteHomeById(id)
     }
+
+
+    suspend fun uploadImagesToStorage(uris: List<Uri>): List<String> {
+        val storage = FirebaseStorage.getInstance().reference
+        val urls = mutableListOf<String>()
+        for (uri in uris) {
+            val filename = "homes/${UUID.randomUUID()}.jpg"
+            val ref = storage.child(filename)
+            ref.putFile(uri).await()
+            urls += ref.downloadUrl.await().toString()
+        }
+        return urls
+    }
+
+    // Save a new Home to Firestore (after upload images)
+    suspend fun addHomeToCloud(name: String, location: String, desc: String, photoUris: List<Uri>) {
+        val imageUrls = uploadImagesToStorage(photoUris)
+        val homeId = UUID.randomUUID().toString()
+        val home = Home(
+            id = homeId,
+            name = name,
+            location = location,
+            description = desc,
+            imageUrls = imageUrls
+        )
+        FirebaseFirestore.getInstance()
+            .collection("homes")
+            .document(homeId)
+            .set(home)
+            .await()
+    }
+
+    // Live stream of all homes from Firestore
+    fun homesFromCloud(): Flow<List<Home>> = callbackFlow {
+        val reg = FirebaseFirestore.getInstance()
+            .collection("homes")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    close(err)
+                    return@addSnapshotListener
+                }
+                val list = snap?.documents?.mapNotNull { it.toObject(Home::class.java) } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { reg.remove() }
+    }
+
 
     // ---- Client ops ----
     suspend fun toggleCheckInOut(homeId: String, userId: String) {
