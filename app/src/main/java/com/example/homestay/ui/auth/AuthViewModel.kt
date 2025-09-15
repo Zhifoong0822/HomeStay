@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
@@ -611,14 +612,6 @@ class AuthViewModel(
             )
 
             try {
-                if (updatedProfile.username.isBlank()) {
-                    _editProfileState.value = _editProfileState.value.copy(
-                        isLoading = false,
-                        errorMessage = "Username cannot be empty"
-                    )
-                    return@launch
-                }
-
                 val currentProfile = _uiState.value.userProfile
                 if (currentProfile == null) {
                     _editProfileState.value = _editProfileState.value.copy(
@@ -628,15 +621,32 @@ class AuthViewModel(
                     return@launch
                 }
 
-                // Check username availability if changed
+                // Check if username is actually changing
                 if (updatedProfile.username != currentProfile.username) {
-                    if (!authRepository.isUsernameAvailableForUser(updatedProfile.username, currentProfile.userId)) {
+                    Log.d("EditProfile", "Username IS changing - checking availability")
+
+                    if (updatedProfile.username.isBlank()) {
+                        _editProfileState.value = _editProfileState.value.copy(
+                            isLoading = false,
+                            errorMessage = "Username cannot be empty"
+                        )
+                        return@launch
+                    }
+
+                    Log.d("EditProfile", "Calling isUsernameAvailableForUser")
+                    val isAvailable = authRepository.isUsernameAvailableForUser(updatedProfile.username, currentProfile.userId)
+                    Log.d("EditProfile", "Username available result: $isAvailable")
+
+                    if (!isAvailable) {
+                        Log.d("EditProfile", "Username NOT available - showing error")
                         _editProfileState.value = _editProfileState.value.copy(
                             isLoading = false,
                             errorMessage = "Username is already taken"
                         )
                         return@launch
                     }
+                } else {
+                    Log.d("EditProfile", "Username NOT changing - skipping check")
                 }
 
                 when (val result = authRepository.updateUserProfile(updatedProfile)) {
@@ -779,7 +789,7 @@ class AuthViewModel(
         _resetPasswordState.value = ResetPasswordState()
     }
 
-    fun clearEditProfileMessages() {
+    fun clearEditProfileForm() {
         _editProfileState.value = EditProfileState()
     }
 

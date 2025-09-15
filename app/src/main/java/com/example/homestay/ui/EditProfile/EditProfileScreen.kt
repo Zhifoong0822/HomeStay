@@ -1,6 +1,7 @@
 package com.example.homestay.ui.EditProfile
 
 import android.app.DatePickerDialog
+import android.util.Log
 import android.widget.DatePicker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +50,7 @@ import com.example.homestay.AuthViewModel
 import com.example.homestay.R
 import com.example.homestay.UserProfile
 import java.util.Calendar
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
 fun EditProfileScreen(
@@ -61,10 +63,10 @@ fun EditProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val editProfileState by viewModel.editProfileState.collectAsState()
 
-    var newUsername by remember { mutableStateOf("") }
-    var newGender by remember { mutableStateOf("") }
-    var newBirthdate by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
+    var newUsername by rememberSaveable { mutableStateOf("") }
+    var newGender by rememberSaveable { mutableStateOf("") }
+    var newBirthdate by rememberSaveable { mutableStateOf("") }
+    var expanded by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val context = LocalContext.current
@@ -89,16 +91,6 @@ fun EditProfileScreen(
         }
     }
 
-    // Initialize fields with current profile data
-    LaunchedEffect(uiState.userProfile) {
-        uiState.userProfile?.let { profile ->
-            // Don't overwrite user input, only set initial values if fields are empty
-            if (newUsername.isEmpty()) newUsername = ""
-            if (newGender.isEmpty()) newGender = ""
-            if (newBirthdate.isEmpty()) newBirthdate = ""
-        }
-    }
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
@@ -111,7 +103,8 @@ fun EditProfileScreen(
         ) {
             //Back Button
             OutlinedButton(
-                onClick = { onBackButtonClicked() },
+                onClick = { viewModel.clearEditProfileForm()
+                    onBackButtonClicked() },
                 modifier = Modifier.padding(top = 90.dp)
                     .padding(start = 22.dp)
             ) {
@@ -173,7 +166,8 @@ fun EditProfileScreen(
                     modifier = Modifier
                         .padding(horizontal = 24.dp)
                         .fillMaxWidth(),
-                    enabled = !editProfileState.isLoading
+                    enabled = !editProfileState.isLoading,
+                    isError = editProfileState.errorMessage?.contains("username", ignoreCase = true) == true
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
@@ -230,7 +224,7 @@ fun EditProfileScreen(
                 //New Gender
                 OutlinedTextField(
                     value = newGender,
-                    onValueChange = { },
+                    onValueChange = {},
                     readOnly = true,
                     label = {
                         Text(
