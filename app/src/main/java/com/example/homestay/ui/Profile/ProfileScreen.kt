@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -64,9 +65,9 @@ fun ProfileScreen(
     }
 
     LaunchedEffect(editProfileState.value.successMessage) {
-        editProfileState.value.successMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearEditProfileMessages()
+        editProfileState.value.successMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearEditProfileForm()
         }
     }
 
@@ -89,25 +90,31 @@ fun ProfileScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 //Back Button
-                OutlinedButton(
-                    onClick = { onBackButtonClicked() },
-                    modifier = Modifier
-                        .padding(top = topPadding, start = 15.dp)
-                ) {
+                OutlinedButton( onClick = { onBackButtonClicked() },
+                    modifier = Modifier.padding(top = 37.dp, start = 10.dp)
+                ){
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back",
                         tint = Color.Black,
-                        modifier = Modifier.size(35.dp)
-                    )
-                }
+                        modifier = Modifier.size(30.dp) ) }
+
+                Spacer(modifier = Modifier.weight(1.2f))
+
+                //Profile Title
+                Text(text = "PROFILE",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    color = Color.Black,
+                    modifier = Modifier.padding(top = 33.dp))
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 //Edit profile
                 OutlinedButton(
                     onClick = { onEditProfileClicked() },
-                    modifier = Modifier.padding(top = topPadding, end = 15.dp)
+                    modifier = Modifier.padding(top = topPadding, end = 10.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
@@ -115,18 +122,17 @@ fun ProfileScreen(
                         tint = Color.Blue,
                         modifier = Modifier.size(28.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
                     Text(
-                        text = "Edit Profile",
+                        text = "Edit",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Blue,
-                        textDecoration = TextDecoration.Underline
+                        color = Color.Blue
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(25.dp))
 
             //Profile Picture
             Column(
@@ -143,7 +149,7 @@ fun ProfileScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(33.dp))
 
             uiState.value.userProfile?.let { profile ->
                 OutlinedCard(
@@ -224,8 +230,7 @@ fun ProfileScreen(
                             text = "Delete Account",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Red,
-                            textDecoration = TextDecoration.Underline
+                            color = Color.Red
                         )
                     }
 
@@ -289,8 +294,7 @@ fun ProfileScreen(
                             text = "Log out",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Red,
-                            textDecoration = TextDecoration.Underline
+                            color = Color.Red
                         )
                     }
                 }

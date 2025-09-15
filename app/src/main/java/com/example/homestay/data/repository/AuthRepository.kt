@@ -251,11 +251,18 @@ class AuthRepository(private val context: Context) {
     // Update user profile
     suspend fun updateUserProfile(userProfile: UserProfile): AuthResult<UserProfile> {
         return try {
+            val isAvailable = isUsernameAvailableForUser(userProfile.username, userProfile.userId)
+            if (!isAvailable) {
+                return AuthResult.Error(Exception("Username is already taken"))
+            }
+
             val updatedProfile = userProfile.copy(updatedAt = System.currentTimeMillis())
             firestore.collection(USERS_COLLECTION)
                 .document(userProfile.userId)
                 .set(updatedProfile)
                 .await()
+
+            saveUserToLocal(updatedProfile)
             AuthResult.Success(updatedProfile)
         } catch (e: Exception) {
             AuthResult.Error(e)
@@ -476,7 +483,6 @@ class AuthRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.d("AuthRepository", "Error checking email: ${e.message}")
             // Firebase doesn't always tell us if user doesn't exist for security reasons
-            // So this method isn't 100% reliable
             false
         }
     }

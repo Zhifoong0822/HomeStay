@@ -77,7 +77,7 @@ fun SignUpScreen(isTablet: Boolean,
 
     val signUpState by viewModel.signUpState.collectAsState()
     val scrollState = rememberScrollState()
-    val shouldClearForm by viewModel.shouldClearLoginForm.collectAsState()
+    val shouldClearForm by viewModel.shouldClearSignUpForm.collectAsState()
     val roleOptions = listOf("Guest","Host")
     val genderOptions = listOf("Male","Female","Prefer not to say")
     var expanded by remember { mutableStateOf(false) }
@@ -98,8 +98,7 @@ fun SignUpScreen(isTablet: Boolean,
 
     //clear only when shouldClearForm = true
     LaunchedEffect(shouldClearForm) {
-        if(shouldClearForm){
-            Log.d("SignUpScreen", "SignUpScreen composed, clearing form")
+        if (shouldClearForm) {
             viewModel.forceCleanState()
         }
     }
@@ -108,6 +107,7 @@ fun SignUpScreen(isTablet: Boolean,
         if (signUpState.successMessage != null) {
             snackbarHostState.showSnackbar(signUpState.successMessage!!)
             onSuccess()
+            viewModel.clearSignUpForm()
             viewModel.clearSignUpMessages()
         }
     }

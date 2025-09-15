@@ -1,6 +1,7 @@
 package com.example.homestay.ui.EditProfile
 
 import android.app.DatePickerDialog
+import android.util.Log
 import android.widget.DatePicker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,22 +61,19 @@ fun EditProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val editProfileState by viewModel.editProfileState.collectAsState()
-
-    var newUsername by remember { mutableStateOf("") }
-    var newGender by remember { mutableStateOf("") }
-    var newBirthdate by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
-
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
+
+    var expanded by remember { mutableStateOf(false) }
 
     val datePickerDialog = remember {
         DatePickerDialog(
             context,
             { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
                 val newDate = String.format("%02d/%02d/%d", dayOfMonth, month + 1, year)
-                newBirthdate = newDate
+                viewModel.updateNewBirthdate(newDate)
             },
             calendar.get(Calendar.YEAR),
             calendar.get(Calendar.MONTH),
@@ -85,17 +83,8 @@ fun EditProfileScreen(
 
     LaunchedEffect(editProfileState.successMessage) {
         editProfileState.successMessage?.let {
+            viewModel.clearEditProfileForm()
             onSaveSuccess()
-        }
-    }
-
-    // Initialize fields with current profile data
-    LaunchedEffect(uiState.userProfile) {
-        uiState.userProfile?.let { profile ->
-            // Don't overwrite user input, only set initial values if fields are empty
-            if (newUsername.isEmpty()) newUsername = ""
-            if (newGender.isEmpty()) newGender = ""
-            if (newBirthdate.isEmpty()) newBirthdate = ""
         }
     }
 
@@ -107,11 +96,12 @@ fun EditProfileScreen(
             modifier = Modifier
                 .background(color = Color(0xFFFEF9F3))
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
         ) {
             //Back Button
             OutlinedButton(
-                onClick = { onBackButtonClicked() },
+                onClick = { viewModel.clearEditProfileForm()
+                    onBackButtonClicked() },
                 modifier = Modifier.padding(top = 90.dp)
                     .padding(start = 22.dp)
             ) {
@@ -156,8 +146,8 @@ fun EditProfileScreen(
 
                 //New Username
                 OutlinedTextField(
-                    value = newUsername,
-                    onValueChange = { newUsername = it },
+                    value = editProfileState.newUsername,
+                    onValueChange = { viewModel.updateNewUsername(it) },
                     label = {
                         Text(
                             text = "New Username",
@@ -173,7 +163,8 @@ fun EditProfileScreen(
                     modifier = Modifier
                         .padding(horizontal = 24.dp)
                         .fillMaxWidth(),
-                    enabled = !editProfileState.isLoading
+                    enabled = !editProfileState.isLoading,
+                    isError = editProfileState.errorMessage?.contains("username", ignoreCase = true) == true
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
@@ -229,8 +220,8 @@ fun EditProfileScreen(
 
                 //New Gender
                 OutlinedTextField(
-                    value = newGender,
-                    onValueChange = { },
+                    value = editProfileState.newGender,
+                    onValueChange = {},
                     readOnly = true,
                     label = {
                         Text(
@@ -269,7 +260,7 @@ fun EditProfileScreen(
                         DropdownMenuItem(
                             text = { Text(genderOption) },
                             onClick = {
-                                newGender = genderOption
+                                viewModel.updateNewGender(genderOption)
                                 expanded = false
                             }
                         )
@@ -298,8 +289,8 @@ fun EditProfileScreen(
 
                 //New Birthdate
                 OutlinedTextField(
-                    value = newBirthdate,
-                    onValueChange = { newBirthdate = it },
+                    value = editProfileState.newBirthdate,
+                    onValueChange = { viewModel.updateNewBirthdate(it) },
                     label = {
                         Text(
                             "Birthdate",
@@ -330,16 +321,18 @@ fun EditProfileScreen(
                     onClick = {
                         val updatedProfile = UserProfile(
                             userId = profile.userId,
-                            username = if (newUsername.isNotBlank()) newUsername.trim() else profile.username,
-                            email = profile.email, //Email cannot be changed
-                            gender = if (newGender.isNotBlank()) newGender.trim() else profile.gender,
-                            birthdate = if (newBirthdate.isNotBlank()) newBirthdate.trim() else profile.birthdate,
+                            username = if (editProfileState.newUsername.isNotBlank()) editProfileState.newUsername.trim() else profile.username,
+                            email = profile.email,
+                            gender = if (editProfileState.newGender.isNotBlank()) editProfileState.newGender.trim() else profile.gender,
+                            birthdate = if (editProfileState.newBirthdate.isNotBlank()) editProfileState.newBirthdate.trim() else profile.birthdate,
                             createdAt = profile.createdAt
                         )
                         viewModel.updateUserProfile(updatedProfile)
                     },
                     enabled = !editProfileState.isLoading &&
-                            (newUsername.isNotBlank() || newGender.isNotBlank() || newBirthdate.isNotBlank()),
+                            (editProfileState.newUsername.isNotBlank() ||
+                                    editProfileState.newGender.isNotBlank() ||
+                                    editProfileState.newBirthdate.isNotBlank()),
                     colors = ButtonDefaults.elevatedButtonColors(
                         containerColor = Color(0xFF446F5C),
                         contentColor = Color.White
