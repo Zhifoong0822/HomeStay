@@ -1,5 +1,6 @@
 package com.example.homestay.ui.property
 
+<<<<<<< Updated upstream
 import android.Manifest
 import android.content.Context
 import android.net.Uri
@@ -101,10 +102,106 @@ fun HostAddOrEditHomeScreen(
         } else {
             // Edit existing → prefill from the selected home
             homeDetails?.home?.let { propertyVM.loadDraftFrom(it) }
+=======
+    import android.Manifest
+    import android.content.Context
+    import android.net.Uri
+    import android.util.Log
+    import androidx.activity.compose.rememberLauncherForActivityResult
+    import androidx.activity.result.contract.ActivityResultContracts
+    import androidx.compose.foundation.BorderStroke
+    import androidx.compose.foundation.layout.*
+    import androidx.compose.foundation.rememberScrollState
+    import androidx.compose.foundation.shape.RoundedCornerShape
+    import androidx.compose.foundation.verticalScroll
+    import androidx.compose.material.icons.Icons
+    import androidx.compose.material.icons.filled.Delete
+    import androidx.compose.material.icons.filled.Save
+    import androidx.compose.material3.*
+    import androidx.compose.runtime.*
+    import androidx.compose.runtime.saveable.rememberSaveable
+    import androidx.compose.ui.Alignment
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.graphics.Color
+    import androidx.compose.ui.platform.LocalConfiguration
+    import androidx.compose.ui.platform.LocalContext
+    import androidx.compose.ui.text.font.FontWeight
+    import androidx.compose.ui.unit.dp
+    import androidx.core.content.FileProvider
+    import androidx.navigation.NavController
+    import com.example.homestay.AuthViewModel
+    import com.example.homestay.data.local.PromotionEntity
+    import com.example.homestay.data.model.Home
+    import com.example.homestay.data.model.HomeFirebase
+    import com.example.homestay.data.model.HomeWithDetails
+    import com.example.homestay.data.repository.FirebaseRepository
+    import com.example.homestay.ui.HostHome.HomeWithDetailsViewModel
+    import kotlinx.coroutines.launch
+    import java.io.File
+    import java.text.SimpleDateFormat
+    import java.util.Date
+    import java.util.Locale
+    import java.util.UUID
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun HostAddOrEditHomeScreen(
+        homeId: String?, // null if adding new home
+        homeVM: HomeWithDetailsViewModel,
+        propertyVM: PropertyListingViewModel,
+        authViewModel: AuthViewModel,
+        isEdit: Boolean = false,
+        onBack: () -> Unit,
+        navController: NavController
+    ) {
+        val uiState by authViewModel.uiState.collectAsState()
+        val hostId = uiState.userProfile?.userId
+
+        LaunchedEffect(hostId) {
+            if (!hostId.isNullOrBlank()) {
+                Log.d("DEBUG_HOMES", "Loading homes for hostId='$hostId'")
+                homeVM.setHostId(hostId)
+                homeVM.loadHostHomes(hostId)
+            } else {
+                Log.d("DEBUG_HOMES", "No hostId found — clearing homes")
+                homeVM.clearHomes() // optional: clears previous list
+            }
+        }
+
+
+
+        val homes by homeVM.homesWithDetails.collectAsState(initial = emptyList())
+        // --- Debug: check if homes are loaded ---
+        LaunchedEffect(homes) {
+            Log.d("DEBUG_HOMES", "Homes count: ${homes.size}")
+            homes.forEach { Log.d("DEBUG_HOMES", "Home: ${it.baseInfo.name}, ID: ${it.id}") }
+        }
+        val homeDetails: HomeWithDetails? = if (homeId != null) {
+            homes.firstOrNull { it.id == homeId }
+        } else null
+        var name by rememberSaveable { mutableStateOf("") }
+        var location by rememberSaveable { mutableStateOf("") }
+        var description by rememberSaveable { mutableStateOf("") }
+        var localPrice by rememberSaveable { mutableStateOf("") }
+        var promotion by remember { mutableStateOf<PromotionEntity?>(null) }
+
+        LaunchedEffect(homeDetails) {
+            homeDetails?.let {
+                name = it.baseInfo.name
+                location = it.baseInfo.location
+                description = it.baseInfo.description
+                localPrice = it.price?.toString() ?: ""
+                promotion = it.promotion
+            }
+        }
+
+
+>>>>>>> Stashed changes
 
         }
     }
 
+<<<<<<< Updated upstream
     fun createImageUri(ctx: Context): Uri {
         val time = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val image = File.createTempFile("IMG_${time}_", ".jpg", ctx.cacheDir)
@@ -122,6 +219,13 @@ fun HostAddOrEditHomeScreen(
         }.toTypedArray()
         permissionLauncher.launch(perms)
     }
+=======
+        val snackbarHostState = remember { SnackbarHostState() }
+
+
+        val firebaseRepo = remember { FirebaseRepository() }
+        val coroutineScope = rememberCoroutineScope()
+>>>>>>> Stashed changes
 
     BackHandler {
         propertyVM.clearDraft()
@@ -185,6 +289,7 @@ fun HostAddOrEditHomeScreen(
                     )
                     Spacer(Modifier.height(12.dp))
 
+<<<<<<< Updated upstream
                     // --- Photo buttons ---
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ElevatedButton(
@@ -192,10 +297,76 @@ fun HostAddOrEditHomeScreen(
                                 requestMediaPermissions()
                                 galleryLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+=======
+                        // --- Price Section ---
+                        OutlinedTextField(
+                            value = localPrice,
+                            onValueChange = { localPrice = it },
+                            label = { Text("Price (RM)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF446F5C),
+                                unfocusedBorderColor = Color.Gray,
+                                cursorColor = Color(0xFF446F5C)
+                            )
+                        )
+                        Spacer(Modifier.height(16.dp))
+
+                        // --- Promotion Section ---
+                        Text(
+                            "Promotion:",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF446F5C)
+                        )
+
+                        var showDeleteDialog by remember { mutableStateOf(false) }
+
+                        if (promotion != null) {
+                            val promoNonNull = promotion!! // make a non-null copy
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Text("${promoNonNull.description} - ${promoNonNull.discountPercent}% OFF")
+                                Spacer(Modifier.width(8.dp))
+                                IconButton(onClick = { showDeleteDialog = true }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete Promo",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+
+                            if (showDeleteDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteDialog = false },
+                                    title = { Text("Delete Promotion") },
+                                    text = { Text("Are you sure you want to delete this promotion?") },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                homeVM.deletePromotion(promoNonNull) // ✅ pass non-null
+                                                showDeleteDialog = false
+                                                promotion = null // update state so UI reflects deletion
+                                            }
+                                        ) {
+                                            Text("Yes", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showDeleteDialog = false }) {
+                                            Text("Cancel")
+                                        }
+                                    }
+>>>>>>> Stashed changes
                                 )
                             }
                         ) { Text("+ Gallery") }
 
+<<<<<<< Updated upstream
                         ElevatedButton(
                             onClick = {
                                 requestMediaPermissions()
@@ -239,11 +410,94 @@ fun HostAddOrEditHomeScreen(
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${promotion.description} - ${promotion.discountPercent}% OFF")
+=======
+
+
+                        Spacer(Modifier.height(32.dp))
+
+                        val uiState by authViewModel.uiState.collectAsState()
+                        val currentHostId = uiState.userProfile?.userId ?: ""
+
+
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val newPriceDouble = localPrice.toDoubleOrNull()
+                                    val isNewHome = homeDetails == null
+
+                                    // Prepare Home object
+                                    val homeId = homeDetails?.id ?: UUID.randomUUID().toString()
+                                    val updatedHome = Home(
+                                        id = homeId,
+                                        name = name,
+                                        location = location,
+                                        description = description,
+                                        hostId = currentHostId
+                                    )
+
+                                    // --- Save to Room / VM ---
+                                    homeVM.updateHome(updatedHome, newPriceDouble)
+
+                                    // --- Save to Firebase ---
+                                    val promotionModel = promotion?.let {
+                                        com.example.homestay.data.model.Promotion(
+                                            description = it.description,
+                                            discountPercent = it.discountPercent
+                                        )
+                                    }
+                                    val homeFirebase = HomeFirebase(
+                                        id = updatedHome.id,
+                                        name = updatedHome.name,
+                                        location = updatedHome.location,
+                                        description = updatedHome.description,
+                                        price = newPriceDouble,
+                                        promotion = promotionModel,
+                                        hostId = currentHostId
+                                    )
+                                    firebaseRepo.addHomeToFirebase(homeFirebase)
+
+                                    // --- Immediately update UI locally ---
+                                    val currentList = homeVM.homesWithDetails.value.toMutableList()
+                                    val newHomeWithDetails = HomeWithDetails(
+                                        id = updatedHome.id,
+                                        baseInfo = updatedHome,
+                                        price = newPriceDouble,
+                                        promotion = promotion,
+                                        checkStatus = null
+                                    )
+
+                                    if (isNewHome) {
+                                        currentList.add(newHomeWithDetails)
+                                    } else {
+                                        val index = currentList.indexOfFirst { it.id == updatedHome.id }
+                                        if (index >= 0) {
+                                            currentList[index] = newHomeWithDetails
+                                        } else {
+                                            currentList.add(newHomeWithDetails)
+                                        }
+                                    }
+
+                                    // Update the VM's StateFlow
+                                    homeVM.addOrUpdateHomeInList(newHomeWithDetails)
+
+                                    navController.popBackStack()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF446F5C),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = "Save")
+>>>>>>> Stashed changes
                             Spacer(Modifier.width(8.dp))
                             IconButton(onClick = { showDeleteDialog = true }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete Promo", tint = MaterialTheme.colorScheme.error)
                             }
                         }
+<<<<<<< Updated upstream
                         if (showDeleteDialog) {
                             AlertDialog(
                                 onDismissRequest = { showDeleteDialog = false },
@@ -259,6 +513,21 @@ fun HostAddOrEditHomeScreen(
                                     TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
                                 }
                             )
+=======
+
+
+
+                        Spacer(Modifier.height(16.dp))
+
+                        OutlinedButton(
+                            onClick = onBack,
+                            border = BorderStroke(2.dp, Color(0xFF446F5C)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF446F5C)),
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Back", fontWeight = FontWeight.Bold)
+>>>>>>> Stashed changes
                         }
                     }
 

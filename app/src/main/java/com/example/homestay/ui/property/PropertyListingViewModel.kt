@@ -96,6 +96,7 @@ class PropertyListingViewModel(
         handle[Keys.PHOTO_URIS] = arrayListOf<String>()
     }
 
+<<<<<<< Updated upstream
     // ---- Host (local DB) ----
     fun addHome(onDone: () -> Unit) = viewModelScope.launch {
         repo.addHome(Home(name = draftName, location = draftLocation, description = draftDesc))
@@ -116,6 +117,8 @@ class PropertyListingViewModel(
         clearDraft()
         onDone(newId)
     }
+=======
+>>>>>>> Stashed changes
 
     // ---- Host (cloud) ----
     fun addHomeToCloud(photoUris: List<Uri>, onDone: () -> Unit) {

@@ -1,5 +1,6 @@
 package com.example.homestay.data.repository
 
+import com.example.homestay.data.local.HomeEntity
 import com.example.homestay.data.local.HomestayPrice
 import com.example.homestay.data.local.HomestayPriceDao
 import com.example.homestay.data.local.PromotionDao
@@ -40,6 +41,8 @@ class HomestayRepository(
     suspend fun getPriceForHome(homeId: String): HomestayPrice? {
         return priceDao.getPriceForHome(homeId)
     }
+
+
 
     suspend fun insertPrice(price: HomestayPrice) {
         priceDao.insertPrice(price)

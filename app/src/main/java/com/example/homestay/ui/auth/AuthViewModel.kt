@@ -114,6 +114,8 @@ class AuthViewModel(
         _loginState.value = _loginState.value.copy(password = newPassword)
     }
 
+
+
     fun login() {
         val email = _loginState.value.email.trim()
         val password = _loginState.value.password.trim()
@@ -130,46 +132,51 @@ class AuthViewModel(
         if (!isValid) return
 
         viewModelScope.launch {
-            _loginState.value = _loginState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
+            _loginState.value = _loginState.value.copy(
+                isLoading = true,
+                errorMessage = null,
+                successMessage = null
+            )
 
             try {
                 when (val result = authRepository.login(email, password)) {
                     is AuthResult.Success -> {
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
-                            successMessage = if (result.data != null) {
-                                "Login successful (Firebase)!"
-                            } else {
-                                "Login successful (Offline mode)"
-                            }
+                            successMessage = "Login successful!"
                         )
-                        //set isLoggedIn = true
-                        viewModelScope.launch {
-                            dataStoreManager.setLoginStatus(true)
-                        }
-                        //Load profile either from Firebase or local
+
+                        // mark logged in
+                        viewModelScope.launch { dataStoreManager.setLoginStatus(true) }
+
                         val uid = result.data?.uid
                         if (uid != null) {
-                            loadUserProfile(uid) // Firebase profile
+                            // 🔹 Load profile from Firestore
+                            val firestore = FirebaseFirestore.getInstance()
+                            val doc = firestore.collection("users")
+                                .document(uid)
+                                .get()
+                                .await()
 
-                            //ROOM DB INSERT AFTER LOGIN
+                            val userRole = doc.getString("role") ?: "guest"
+                            val userName = doc.getString("username") ?: (result.data?.email ?: "")
+
+                            // ✅ Load into UI state
+                            loadUserProfile(uid)
+
+                            // 🔹 Insert into Room with username from Firestore
                             result.data?.let { firebaseUser ->
                                 val db = UserDatabase.getDatabase(context)
                                 val userDao = db.userDao()
                                 viewModelScope.launch(Dispatchers.IO) {
-                                    val safeRole = _signUpState.value.role
-                                    if (safeRole.isBlank()) {
-                                        Log.e("AuthViewModel", "Skipping Room insert - role is empty")
-                                        return@launch
-                                    }
                                     val userEntity = UserEntity(
                                         userId = firebaseUser.uid,
                                         email = firebaseUser.email ?: "",
                                         password = "",
-                                        username = _loginState.value.email, // fallback username
-                                        gender = "",
-                                        birthdate = "",
-                                        role = safeRole,
+                                        username = userName, // ✅ now real username
+                                        gender = doc.getString("gender") ?: "",
+                                        birthdate = doc.getString("birthdate") ?: "",
+                                        role = userRole,
                                         createdAt = System.currentTimeMillis(),
                                         updatedAt = System.currentTimeMillis()
                                     )
@@ -177,15 +184,17 @@ class AuthViewModel(
                                 }
                             }
                         } else {
-                            loadLocalUserProfile(email) // Local profile
+                            loadLocalUserProfile(email) // offline fallback
                         }
                     }
+
                     is AuthResult.Error -> {
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
                             errorMessage = result.exception.message ?: "Login failed"
                         )
                     }
+
                     else -> {
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
@@ -201,6 +210,8 @@ class AuthViewModel(
             }
         }
     }
+
+
 
     // SIGNUP
     fun onSignUpEmailChange(email: String) {

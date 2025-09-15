@@ -125,9 +125,14 @@ class PropertyListingRepository(
                 id = home.id,
                 name = home.name,
                 location = home.location,
-                description = home.description
+                description = home.description,
+                hostId = home.hostId
             )
         )
+    }
+
+    suspend fun getHomesByHostId(hostId: String): List<HomeEntity> {
+        return homeDao.getHomesByHostId(hostId)
     }
 
     suspend fun getHomeWithDetails(id: String): HomeWithDetails? {
@@ -148,14 +153,16 @@ class PropertyListingRepository(
         id = id,
         name = name,
         location = location,
-        description = description
+        description = description,
+        hostId = hostId
     )
 
     fun Home.toEntity(): HomeEntity = HomeEntity(
         id = id,
         name = name,
         location = location,
-        description = description
+        description = description,
+        hostId = hostId
     )
 }
 

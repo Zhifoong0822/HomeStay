@@ -1,5 +1,6 @@
 package com.example.homestay
 
+import android.content.Context
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -161,6 +163,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
 @Composable
 fun HomeStayApp(
     windowSizeClass: WindowSizeClass,
@@ -192,6 +195,7 @@ fun HomeStayApp(
                     homeVM = homeVM,
                     isEdit = false,
                     homeId = null,
+                    authViewModel = authViewModel,
                     onBack = { navController.popBackStack() },
                     navController = navController
                 )
@@ -208,6 +212,7 @@ fun HomeStayApp(
                     homeVM = homeVM,
                     isEdit = true,
                     homeId = homeId,
+                    authViewModel = authViewModel,
                     onBack = { navController.popBackStack() },
                     navController = navController
                 )
@@ -331,7 +336,7 @@ fun HomeStayApp(
                 }
             }
 
-            //user screen
+            //client screen
             composable("clientBrowse") {
                 ClientBrowseScreen(
                     vm = propertyVM,
@@ -401,11 +406,26 @@ fun HomeStayApp(
             }
         }
 
-        LaunchedEffect(isLoggedIn) {
-            if (isLoggedIn) {
-                if (uiState.userProfile != null) {
-                    navController.navigate(HomeStayScreen.HostHome.name) {
-                        popUpTo(0) { inclusive = true }
+        LaunchedEffect(isLoggedIn, uiState.userProfile) {
+            val profile = uiState.userProfile
+            if (isLoggedIn && profile != null) {
+                when (profile.role) {
+                    "Host" -> {
+                        navController.navigate(HomeStayScreen.HostHome.name) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                        homeVM.setHostId(profile.userId)
+                    }
+                    "Guest" -> {
+                        navController.navigate("clientBrowse") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                    else -> {
+                        // fallback, e.g. back to logo or show error
+                        navController.navigate(HomeStayScreen.Logo.name) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 }
             } else {
@@ -414,5 +434,7 @@ fun HomeStayApp(
                 }
             }
         }
+
+
     }
 }
