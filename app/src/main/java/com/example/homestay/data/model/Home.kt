@@ -12,7 +12,6 @@ data class HomeWithDetails(
 ) {
     val home: Home
         get() = baseInfo
-
 }
 
 data class Home(
