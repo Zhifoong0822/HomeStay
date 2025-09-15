@@ -156,6 +156,7 @@ fun HostAddOrEditHomeScreen(
     ) {
         val uiState by authViewModel.uiState.collectAsState()
         val hostId = uiState.userProfile?.userId
+<<<<<<< Updated upstream
 
         LaunchedEffect(hostId) {
             if (!hostId.isNullOrBlank()) {
@@ -220,6 +221,53 @@ fun HostAddOrEditHomeScreen(
         permissionLauncher.launch(perms)
     }
 =======
+=======
+
+        LaunchedEffect(hostId) {
+            if (!hostId.isNullOrBlank()) {
+                Log.d("DEBUG_HOMES", "Loading homes for hostId='$hostId'")
+                homeVM.setHostId(hostId)
+                homeVM.loadHostHomes(hostId)
+            } else {
+                Log.d("DEBUG_HOMES", "No hostId found — clearing homes")
+                homeVM.clearHomes() // optional: clears previous list
+            }
+        }
+
+
+
+        val homes by homeVM.homesWithDetails.collectAsState(initial = emptyList())
+        // --- Debug: check if homes are loaded ---
+        LaunchedEffect(homes) {
+            Log.d("DEBUG_HOMES", "Homes count: ${homes.size}")
+            homes.forEach { Log.d("DEBUG_HOMES", "Home: ${it.baseInfo.name}, ID: ${it.id}") }
+        }
+        val homeDetails: HomeWithDetails? = if (homeId != null) {
+            homes.firstOrNull { it.id == homeId }
+        } else null
+        var name by rememberSaveable { mutableStateOf("") }
+        var location by rememberSaveable { mutableStateOf("") }
+        var description by rememberSaveable { mutableStateOf("") }
+        var localPrice by rememberSaveable { mutableStateOf("") }
+        var promotion by remember { mutableStateOf<PromotionEntity?>(null) }
+
+        LaunchedEffect(homeDetails) {
+            homeDetails?.let {
+                name = it.baseInfo.name
+                location = it.baseInfo.location
+                description = it.baseInfo.description
+                localPrice = it.price?.toString() ?: ""
+                promotion = it.promotion
+            }
+        }
+
+
+
+        LaunchedEffect(homeDetails?.price) {
+            localPrice = homeDetails?.price?.toString() ?: ""
+        }
+
+>>>>>>> Stashed changes
         val snackbarHostState = remember { SnackbarHostState() }
 
 
@@ -413,6 +461,8 @@ fun HostAddOrEditHomeScreen(
 =======
 
 
+
+
                         Spacer(Modifier.height(32.dp))
 
                         val uiState by authViewModel.uiState.collectAsState()
@@ -514,6 +564,8 @@ fun HostAddOrEditHomeScreen(
                                 }
                             )
 =======
+
+
 
 
 
