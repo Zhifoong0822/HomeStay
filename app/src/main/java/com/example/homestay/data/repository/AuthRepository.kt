@@ -483,7 +483,6 @@ class AuthRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.d("AuthRepository", "Error checking email: ${e.message}")
             // Firebase doesn't always tell us if user doesn't exist for security reasons
-            // So this method isn't 100% reliable
             false
         }
     }
