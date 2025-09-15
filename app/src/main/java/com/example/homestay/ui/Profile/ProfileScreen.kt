@@ -91,21 +91,23 @@ fun ProfileScreen(
             ) {
                 //Back Button
                 OutlinedButton( onClick = { onBackButtonClicked() },
-                    modifier = Modifier.padding(top = 35.dp, start = 10.dp)
+                    modifier = Modifier.padding(top = 37.dp, start = 10.dp)
                 ){
-                    Icon( imageVector = Icons.Default.ArrowBack,
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back",
                         tint = Color.Black,
                         modifier = Modifier.size(30.dp) ) }
 
                 Spacer(modifier = Modifier.weight(1.2f))
 
+                //Profile Title
                 Text(text = "PROFILE",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.sp,
                     color = Color.Black,
-                    modifier = Modifier.padding(top = 32.dp))
+                    modifier = Modifier.padding(top = 33.dp))
 
                 Spacer(modifier = Modifier.weight(1f))
 
@@ -120,7 +122,7 @@ fun ProfileScreen(
                         tint = Color.Blue,
                         modifier = Modifier.size(28.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
                     Text(
                         text = "Edit",
                         fontSize = 20.sp,

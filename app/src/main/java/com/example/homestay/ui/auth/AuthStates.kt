@@ -48,6 +48,9 @@ data class ResetPasswordState(
 )
 
 data class EditProfileState(
+    val newUsername: String = "",
+    val newGender: String = "",
+    val newBirthdate: String = "",
     val isLoading: Boolean = false,
     val successMessage: String? = null,
     val errorMessage: String? = null

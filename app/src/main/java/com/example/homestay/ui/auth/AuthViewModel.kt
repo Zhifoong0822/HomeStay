@@ -49,16 +49,22 @@ class AuthViewModel(
     private val _signUpState = MutableStateFlow(SignUpState())
     val signUpState = _signUpState.asStateFlow()
 
+    private val _editProfileState = MutableStateFlow(EditProfileState())
+    val editProfileState = _editProfileState.asStateFlow()
+
     private var usernameCheckJob: Job? = null
 
     private val _resetPasswordState = MutableStateFlow(ResetPasswordState())
     val resetPasswordState = _resetPasswordState.asStateFlow()
 
-    private val _editProfileState = MutableStateFlow(EditProfileState())
-    val editProfileState = _editProfileState.asStateFlow()
-
     private val _shouldClearLoginForm = MutableStateFlow(false)
     val shouldClearLoginForm = _shouldClearLoginForm.asStateFlow()
+
+    private val _shouldClearSignUpForm = MutableStateFlow(false)
+    val shouldClearSignUpForm = _shouldClearSignUpForm.asStateFlow()
+
+    private val _shouldClearEditProfileForm = MutableStateFlow(false)
+    val shouldClearEditProfileForm = _shouldClearEditProfileForm.asStateFlow()
 
     // Initialize the ViewModel by checking current auth state
     init {
@@ -588,7 +594,6 @@ class AuthViewModel(
         }
     }
 
-    // Add a manual refresh function
     fun refreshUserProfile() {
         val currentUser = authRepository.getCurrentUser()
         if (currentUser != null) {
@@ -633,18 +638,6 @@ class AuthViewModel(
                         return@launch
                     }
 
-                    Log.d("EditProfile", "Calling isUsernameAvailableForUser")
-                    val isAvailable = authRepository.isUsernameAvailableForUser(updatedProfile.username, currentProfile.userId)
-                    Log.d("EditProfile", "Username available result: $isAvailable")
-
-                    if (!isAvailable) {
-                        Log.d("EditProfile", "Username NOT available - showing error")
-                        _editProfileState.value = _editProfileState.value.copy(
-                            isLoading = false,
-                            errorMessage = "Username is already taken"
-                        )
-                        return@launch
-                    }
                 } else {
                     Log.d("EditProfile", "Username NOT changing - skipping check")
                 }
@@ -690,6 +683,18 @@ class AuthViewModel(
         }
     }
 
+    fun updateNewUsername(value: String) {
+        _editProfileState.update { it.copy(newUsername = value) }
+    }
+
+    fun updateNewGender(value: String) {
+        _editProfileState.update { it.copy(newGender = value) }
+    }
+
+    fun updateNewBirthdate(value: String) {
+        _editProfileState.update { it.copy(newBirthdate = value) }
+    }
+
     fun logout() {
         val currentUser = authRepository.getCurrentUser()
         viewModelScope.launch {
@@ -701,9 +706,12 @@ class AuthViewModel(
 
         // Mark that login form should be cleared next time
         _shouldClearLoginForm.value = true
+        _shouldClearSignUpForm.value = true
+        _shouldClearEditProfileForm.value = true
 
         // Clear everything
         clearErrors()
+        clearEditProfileForm()
         forceCleanState()
 
         _uiState.value = _uiState.value.copy(
@@ -715,6 +723,11 @@ class AuthViewModel(
     fun markLoginFormForClearing() {
         _shouldClearLoginForm.value = false
         Log.d("AuthViewModel", "Login form marked for clearing")
+    }
+
+    fun markSignUpFormForClearing() {
+        _shouldClearSignUpForm.value = false
+        Log.d("AuthViewModel", "Sign up form marked for clearing")
     }
 
     // Auth Exception Handling
@@ -743,24 +756,39 @@ class AuthViewModel(
     }
 
     fun clearSignUpForm() {
-        _signUpState.value = SignUpState(
-            email = "",
-            password = "",
-            confirmPassword = "",
-            username = "",
-            gender = "",
-            birthdate = "",
-            role = "",
-            emailError = null,
-            passwordError = null,
-            confirmPasswordError = null,
-            usernameError = null,
-            isLoading = false,
-            errorMessage = null,
-            successMessage = null,
-            isCheckingUsername = false,
-            isUsernameAvailable = null
-        )
+        _signUpState.update { currentState ->
+            currentState.copy(
+                email = "",
+                password = "",
+                confirmPassword = "",
+                username = "",
+                gender = "",
+                birthdate = "",
+                role = "",
+                emailError = null,
+                passwordError = null,
+                confirmPasswordError = null,
+                usernameError = null,
+                isLoading = false,
+                errorMessage = null,
+                successMessage = null,
+                isCheckingUsername = false,
+                isUsernameAvailable = null
+            )
+        }
+    }
+
+    fun clearEditProfileForm() {
+        _editProfileState.update { currentState ->
+            currentState.copy(
+                newUsername = "",
+                newGender = "",
+                newBirthdate = "",
+                errorMessage = null,
+                successMessage = null,
+                isLoading = false
+            )
+        }
     }
 
     fun clearErrors() {
@@ -789,17 +817,12 @@ class AuthViewModel(
         _resetPasswordState.value = ResetPasswordState()
     }
 
-    fun clearEditProfileForm() {
-        _editProfileState.value = EditProfileState()
-    }
-
     fun forceCleanState() {
         viewModelScope.launch {
             // Cancel any ongoing operations
             usernameCheckJob?.cancel()
             usernameCheckJob = null
 
-            // Reset all states with explicit empty values
             _loginState.value = LoginState(
                 email = "",
                 password = "",
@@ -830,9 +853,18 @@ class AuthViewModel(
             )
 
             _resetPasswordState.value = ResetPasswordState()
-            _editProfileState.value = EditProfileState()
+            _editProfileState.value = EditProfileState(
+                newUsername = "",
+                newGender = "",
+                newBirthdate = "",
+                errorMessage = null,
+                successMessage = null,
+                isLoading = false
+            )
 
             _shouldClearLoginForm.value = false
+            _shouldClearSignUpForm.value = false
+            _shouldClearEditProfileForm.value = false
 
             Log.d("AuthViewModel", "All forms force cleared")
             Log.d("AuthViewModel", "Login email after clear: '${_loginState.value.email}'")
@@ -902,6 +934,7 @@ class AuthViewModel(
                 )
                 // Mark that login form should be cleared
                 markLoginFormForClearing()
+                markSignUpFormForClearing()
 
                 Log.d("AuthViewModel", "=== DELETE ACCOUNT DEBUG SUCCESS ===")
 
