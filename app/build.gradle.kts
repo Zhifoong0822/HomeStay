@@ -70,6 +70,15 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose.android)
+    implementation("com.google.firebase:firebase-auth-ktx:...")
+
+    implementation("com.google.firebase:firebase-storage-ktx:20.3.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    implementation("androidx.activity:activity-ktx:1.9.0")
+    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation("androidx.core:core-ktx:1.13.1")
 
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.material3:material3")

@@ -6,10 +6,15 @@ data class HomeFirebase(
     val location: String = "",
     val description: String = "",
     val price: Double? = null,
-    val promotion: Promotion? = null
+    val promotion: Promotion? = null,
+    val imageUrls: List<String> = emptyList(),
+    val hostId: String? = null
 )
 
 data class Promotion(
     val description: String = "",
     val discountPercent: Int = 0
 )
+
+
+
