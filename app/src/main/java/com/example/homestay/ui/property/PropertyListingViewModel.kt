@@ -20,6 +20,12 @@ class PropertyListingViewModel(
     private val handle: SavedStateHandle
 ) : ViewModel() {
 
+    private var hostId: String = "" // <- store the logged-in hostId
+
+    fun setHostId(id: String) {
+        hostId = id
+    }
+
     private object Keys {
         const val NAME = "draftName"
         const val LOCATION = "draftLocation"
@@ -53,8 +59,7 @@ class PropertyListingViewModel(
         get() = handle[Keys.DESCRIPTION] ?: ""
         set(v) { handle[Keys.DESCRIPTION] = v }
 
-    /**
-     * Photo URIs: keep a Compose-friendly list in memory,
+    /** Photo URIs: keep a Compose-friendly list in memory,
      * but persist ArrayList<String> in SavedStateHandle.
      */
     val draftPhotoUris: SnapshotStateList<String> = run {
@@ -67,7 +72,7 @@ class PropertyListingViewModel(
             clear()
             addAll(newUris)
         }
-        handle[Keys.PHOTO_URIS] = ArrayList(draftPhotoUris) // Bundle-safe
+        handle[Keys.PHOTO_URIS] = ArrayList(draftPhotoUris)
     }
 
     fun appendDraftPhotoUris(extra: List<String>) =
@@ -96,8 +101,6 @@ class PropertyListingViewModel(
         handle[Keys.PHOTO_URIS] = arrayListOf<String>()
     }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
     // ---- Host (local DB) ----
     fun addHome(onDone: () -> Unit) = viewModelScope.launch {
         repo.addHome(Home(name = draftName, location = draftLocation, description = draftDesc))
@@ -118,10 +121,6 @@ class PropertyListingViewModel(
         clearDraft()
         onDone(newId)
     }
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
     // ---- Host (cloud) ----
     fun addHomeToCloud(photoUris: List<Uri>, onDone: () -> Unit) {
@@ -129,7 +128,7 @@ class PropertyListingViewModel(
         val loc = draftLocation
         val desc = draftDesc
         viewModelScope.launch {
-            repo.addHomeToCloud(name, loc, desc, photoUris)
+            repo.addHomeToCloud(name, loc, desc, photoUris, hostId)
             onDone()
         }
     }
@@ -156,4 +155,5 @@ class PropertyListingViewModel(
     fun isCheckedIn(homeId: String, userId: String): Boolean {
         return repo.checkStatus(homeId, userId)?.checkedIn == true
     }
+
 }

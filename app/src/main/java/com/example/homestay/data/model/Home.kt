@@ -19,18 +19,10 @@ data class Home(
     var name: String = "",
     var location: String = "",
     var description: String = "",
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    var imageUrls: List<String> = emptyList()
-=======
     var photoUris: List<String> = emptyList(),
-    val hostId: String
->>>>>>> Stashed changes
-=======
-    var photoUris: List<String> = emptyList(),
-    val hostId: String
->>>>>>> Stashed changes
+    val hostId: String = ""   // default added
 )
+
 
 data class CheckStatus(
     val homeId: String,

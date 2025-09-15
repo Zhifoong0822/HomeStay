@@ -415,6 +415,7 @@ fun HomeStayApp(
                             popUpTo(0) { inclusive = true }
                         }
                         homeVM.setHostId(profile.userId)
+                        propertyVM.setHostId(profile.userId)
                     }
                     "Guest" -> {
                         navController.navigate("clientBrowse") {

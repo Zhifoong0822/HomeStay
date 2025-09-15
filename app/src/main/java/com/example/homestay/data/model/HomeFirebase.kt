@@ -7,17 +7,10 @@ data class HomeFirebase(
     val description: String = "",
     val price: Double? = null,
     val promotion: Promotion? = null,
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    val imageUrls: List<String> = emptyList(),
-    val hostId: String? = null
-=======
-    val hostId: String = ""
->>>>>>> Stashed changes
-=======
-    val hostId: String = ""
->>>>>>> Stashed changes
+    val imageUrls: List<String> = emptyList(), // keep if needed
+    val hostId: String = ""                     // always non-null
 )
+
 
 data class Promotion(
     val description: String = "",

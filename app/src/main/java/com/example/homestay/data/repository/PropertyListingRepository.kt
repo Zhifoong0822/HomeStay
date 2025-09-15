@@ -70,7 +70,7 @@ class PropertyListingRepository(
     }
 
     // Save a new Home to Firestore (after upload images)
-    suspend fun addHomeToCloud(name: String, location: String, desc: String, photoUris: List<Uri>) {
+    suspend fun addHomeToCloud(name: String, location: String, desc: String, photoUris: List<Uri>, hostId: String) {
         val imageUrls = uploadImagesToStorage(photoUris)
         val homeId = UUID.randomUUID().toString()
         val home = Home(
@@ -78,7 +78,8 @@ class PropertyListingRepository(
             name = name,
             location = location,
             description = desc,
-            imageUrls = imageUrls
+            photoUris = imageUrls,
+            hostId = hostId
         )
         FirebaseFirestore.getInstance()
             .collection("homes")

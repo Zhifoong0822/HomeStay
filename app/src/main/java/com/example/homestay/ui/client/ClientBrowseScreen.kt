@@ -139,7 +139,7 @@ private fun ClientHomeCard(home: Home) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = home.imageUrls.firstOrNull(),
+                model = home.photoUris.firstOrNull(),
                 contentDescription = home.name,
                 modifier = Modifier.size(72.dp)
             )
