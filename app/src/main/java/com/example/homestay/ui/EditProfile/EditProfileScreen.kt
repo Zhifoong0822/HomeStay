@@ -83,7 +83,6 @@ fun EditProfileScreen(
 
     LaunchedEffect(editProfileState.successMessage) {
         editProfileState.successMessage?.let {
-            viewModel.clearEditProfileForm()
             onSaveSuccess()
         }
     }

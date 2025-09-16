@@ -205,21 +205,29 @@ class AuthRepository(private val context: Context) {
                 .get()
                 .await()
 
+            Log.d("AuthRepository", "Found ${querySnapshot.size()} document(s) with this username")
             // If no documents, username is available
             if (querySnapshot.isEmpty) {
+                Log.d("AuthRepository", "Username is available (no documents found)")
                 return true
             }
 
             // If only one document and it belongs to current user, username is available
             if (querySnapshot.size() == 1) {
                 val document = querySnapshot.documents[0]
-                return document.id == currentUserId
+                val docUserId = document.getString("userId") ?: ""
+                Log.d("AuthRepository", "Found document userId: $docUserId")
+
+                val available = docUserId == currentUserId
+                Log.d("AuthRepository", "Is username available for current user? $available")
+                return available
             }
 
+            Log.d("AuthRepository", "Username is taken by multiple users")
             // More than one document means username is taken by others
             return false
         } catch (e: Exception) {
-            android.util.Log.e("AuthRepository", "Error checking username availability", e)
+            Log.e("AuthRepository", "Error checking username availability", e)
             // If we can't check, assume it's not available to be safe
             false
         }

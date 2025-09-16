@@ -65,8 +65,10 @@ fun ProfileScreen(
     }
 
     LaunchedEffect(editProfileState.value.successMessage) {
-        editProfileState.value.successMessage?.let { message ->
+        val message = editProfileState.value.successMessage
+        if (!message.isNullOrEmpty()) {
             snackbarHostState.showSnackbar(message)
+            viewModel.clearEditProfileSuccessMessage()
             viewModel.clearEditProfileForm()
         }
     }

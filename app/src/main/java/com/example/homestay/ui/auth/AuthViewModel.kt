@@ -637,7 +637,14 @@ class AuthViewModel(
                         )
                         return@launch
                     }
-
+                    val available = authRepository.isUsernameAvailable(updatedProfile.username)
+                    if (!available) {
+                        _editProfileState.value = _editProfileState.value.copy(
+                            isLoading = false,
+                            errorMessage = "Username already taken"
+                        )
+                        return@launch
+                    }
                 } else {
                     Log.d("EditProfile", "Username NOT changing - skipping check")
                 }
@@ -811,6 +818,10 @@ class AuthViewModel(
             successMessage = null,
             errorMessage = null
         )
+    }
+
+    fun clearEditProfileSuccessMessage() {
+        _editProfileState.update { it.copy(successMessage = null) }
     }
 
     fun clearResetPasswordMessages() {
