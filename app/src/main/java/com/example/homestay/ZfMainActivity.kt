@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import com.example.homestay.ui.client.ClientBrowseScreen
 
+
 enum class HomeStayScreen {
     Logo,
     Login,
@@ -340,12 +341,12 @@ fun HomeStayApp(
             composable("clientBrowse") {
                 ClientBrowseScreen(
                     vm = propertyVM,
-                    onProfileClick = { navController.navigate("clientProfile") },
                     onBottomHome = { navController.navigate("clientBrowse") },
                     onBottomExplore = { /* current */ },
-                    onBottomSettings = { navController.navigate("clientSettings") }
+                    onBottomProfile = { navController.navigate(HomeStayScreen.Profile.name) }
                 )
             }
+
 
             //Profile 
             composable(route = HomeStayScreen.Profile.name) {
@@ -355,7 +356,7 @@ fun HomeStayApp(
                         ProfileScreen(
                             isTablet = false,
                             viewModel = authViewModel,
-                            onBackButtonClicked = { navController.navigate(HomeStayScreen.HostHome.name) },
+                            onBackButtonClicked = { navController.popBackStack() },
                             onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
                             onLogoutClicked = { authViewModel.logout()},
                             onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name)})
@@ -366,22 +367,14 @@ fun HomeStayApp(
                         ProfileScreen(
                             isTablet = true,
                             viewModel = authViewModel,
-                            onBackButtonClicked = { navController.navigate(HomeStayScreen.HostHome.name) },
+                            onBackButtonClicked = { navController.popBackStack() },
                             onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
                             onLogoutClicked = { authViewModel.logout()},
                             onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name)})
                     }
                 }
             }
-            composable("clientBrowse") {
-                ClientBrowseScreen(
-                    vm = propertyVM,
-                    onProfileClick = { navController.navigate("clientProfile") },
-                    onBottomHome = { navController.navigate("clientBrowse") },
-                    onBottomExplore = { /* current */ },
-                    onBottomSettings = { navController.navigate("clientSettings") }
-                )
-            }
+
             //Edit Profile
             composable(route = HomeStayScreen.EditProfile.name) {
                 when (windowSizeClass.widthSizeClass) {

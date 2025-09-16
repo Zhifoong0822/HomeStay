@@ -10,7 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,10 +27,9 @@ import com.example.homestay.ui.common.isTablet
 @Composable
 fun ClientBrowseScreen(
     vm: PropertyListingViewModel,
-    onProfileClick: () -> Unit,
     onBottomHome: () -> Unit,
     onBottomExplore: () -> Unit,  // current screen
-    onBottomSettings: () -> Unit,
+    onBottomProfile: () -> Unit,
 ) {
     val homes by vm.homesCloud.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
@@ -43,10 +42,8 @@ fun ClientBrowseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Available Homes") },
-                actions = {
-                    TextButton(onClick = onProfileClick) { Text("Profile") }
-                }
+                title = { Text("SKY BNB") },
+
             )
         },
         bottomBar = {
@@ -65,9 +62,9 @@ fun ClientBrowseScreen(
                 )
                 NavigationBarItem(
                     selected = false,
-                    onClick = onBottomSettings,
-                    icon = { Icon(Icons.Filled.Settings, null) },
-                    label = { Text("Settings") }
+                    onClick = onBottomProfile,
+                    icon = { Icon(Icons.Filled.Person, null) },
+                    label = { Text("Profile") }
                 )
             }
         }
@@ -143,6 +140,7 @@ private fun ClientHomeCard(home: Home) {
                 contentDescription = home.name,
                 modifier = Modifier.size(72.dp)
             )
+            Spacer(Modifier.width(12.dp))
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(home.name, style = MaterialTheme.typography.titleMedium)
