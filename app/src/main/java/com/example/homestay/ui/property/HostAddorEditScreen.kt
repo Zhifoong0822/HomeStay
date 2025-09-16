@@ -267,43 +267,67 @@ fun HostAddOrEditHomeScreen(
                         onClick = {
                             coroutineScope.launch {
                                 val newPriceDouble = localPrice.toDoubleOrNull()
-                                val updatedHome = Home(
-                                    id = homeDetails?.id ?: UUID.randomUUID().toString(),
-                                    name = name,
-                                    location = location,
-                                    description = description,
-                                    hostId = hostId ?: ""
-                                )
-                                val promotionModel = promotion?.let {
-                                    com.example.homestay.data.model.Promotion(
-                                        description = it.description,
-                                        discountPercent = it.discountPercent
-                                    )
-                                }
-                                val homeFirebase = HomeFirebase(
-                                    id = updatedHome.id,
-                                    name = updatedHome.name,
-                                    location = updatedHome.location,
-                                    description = updatedHome.description,
-                                    price = newPriceDouble,
-                                    promotion = promotionModel,
-                                    hostId = hostId ?: ""
-                                )
 
-                                val uriList: List<Uri> = photoUris.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
+                                when {
+                                    name.isBlank() -> {
+                                        snackbarHostState.showSnackbar("Home name cannot be empty")
+                                    }
+                                    location.isBlank() -> {
+                                        snackbarHostState.showSnackbar("Location cannot be empty")
+                                    }
+                                    description.isBlank() || description.length < 10 -> {
+                                        snackbarHostState.showSnackbar("Description must be at least 10 characters")
+                                    }
+                                    newPriceDouble == null || newPriceDouble <= 0 -> {
+                                        snackbarHostState.showSnackbar("Price must be a positive number")
+                                    }
+                                    else -> {
+                                        // ✅ Only if all inputs valid, proceed with save
+                                        val updatedHome = Home(
+                                            id = homeDetails?.id ?: UUID.randomUUID().toString(),
+                                            name = name,
+                                            location = location,
+                                            description = description,
+                                            hostId = hostId ?: ""
+                                        )
 
-                                try {
-                                    firebaseRepo.addHomeWithPhotos(context, homeFirebase, uriList)
-                                    homeVM.addOrUpdateHomeInList(HomeWithDetails(
-                                        id = updatedHome.id,
-                                        baseInfo = updatedHome,
-                                        price = newPriceDouble,
-                                        promotion = promotion,
-                                        checkStatus = null
-                                    ))
-                                    navController.popBackStack()
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar("Save failed: ${e.localizedMessage ?: "unknown error"}")
+                                        val promotionModel = promotion?.let {
+                                            com.example.homestay.data.model.Promotion(
+                                                description = it.description,
+                                                discountPercent = it.discountPercent
+                                            )
+                                        }
+
+                                        val homeFirebase = HomeFirebase(
+                                            id = updatedHome.id,
+                                            name = updatedHome.name,
+                                            location = updatedHome.location,
+                                            description = updatedHome.description,
+                                            price = newPriceDouble,
+                                            promotion = promotionModel,
+                                            hostId = hostId ?: ""
+                                        )
+
+                                        val uriList: List<Uri> = photoUris.mapNotNull {
+                                            runCatching { Uri.parse(it) }.getOrNull()
+                                        }
+
+                                        try {
+                                            firebaseRepo.addHomeWithPhotos(context, homeFirebase, uriList)
+                                            homeVM.addOrUpdateHomeInList(
+                                                HomeWithDetails(
+                                                    id = updatedHome.id,
+                                                    baseInfo = updatedHome,
+                                                    price = newPriceDouble,
+                                                    promotion = promotion,
+                                                    checkStatus = null
+                                                )
+                                            )
+                                            navController.popBackStack()
+                                        } catch (e: Exception) {
+                                            snackbarHostState.showSnackbar("Save failed: ${e.localizedMessage ?: "unknown error"}")
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -318,6 +342,7 @@ fun HostAddOrEditHomeScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("Save", fontWeight = FontWeight.Bold)
                     }
+
 
                     Spacer(Modifier.height(16.dp))
 
