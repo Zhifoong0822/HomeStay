@@ -21,7 +21,9 @@ data class Home(
     var description: String = "",
     var photoUris: List<String> = emptyList(),
     val hostId: String = ""   ,
-    val pricePerNight: Double = 0.0
+    val pricePerNight: Double = 0.0,
+    val imageUrls: List<String> = emptyList()
+
 )
 
 

@@ -1,27 +1,28 @@
-// FirestoreBookingRepository.kt
 package com.example.homestay.data.repository
 
 import com.example.homestay.data.model.Booking
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.toObjects
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import java.util.*
+import java.util.Date
 
 class FirestoreBookingRepository(
     private val firestore: FirebaseFirestore
 ) : BookingRepository {
 
-    private val bookingsCollection = firestore.collection("bookings")
+    private val bookings = firestore.collection("bookings")
 
-    override suspend fun createBooking(booking: Booking): Result<String> {
+    override suspend fun createBooking(booking: Booking): Result<Unit> {
         return try {
-            val docRef = bookingsCollection.add(booking.copy(
-                createdAt = Date(),
-                updatedAt = Date()
-            )).await()
-            Result.success(docRef.id)
+            val id = if (booking.bookingId.isNotBlank()) booking.bookingId else bookings.document().id
+            val now = Date()
+            bookings.document(id)
+                .set(booking.copy(bookingId = id, createdAt = now, updatedAt = now))
+                .await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -29,8 +30,9 @@ class FirestoreBookingRepository(
 
     override suspend fun updateBooking(booking: Booking): Result<Unit> {
         return try {
-            bookingsCollection.document(booking.bookingId)
-                .set(booking.copy(updatedAt = Date())).await()
+            bookings.document(booking.bookingId)
+                .set(booking.copy(updatedAt = Date()))
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -39,8 +41,9 @@ class FirestoreBookingRepository(
 
     override suspend fun cancelBooking(bookingId: String): Result<Unit> {
         return try {
-            bookingsCollection.document(bookingId)
-                .update(mapOf("status" to "CANCELLED", "updatedAt" to Date())).await()
+            bookings.document(bookingId)
+                .update(mapOf("status" to "CANCELLED", "updatedAt" to Date()))
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -53,7 +56,7 @@ class FirestoreBookingRepository(
         newCheckOut: Date
     ): Result<Unit> {
         return try {
-            bookingsCollection.document(bookingId)
+            bookings.document(bookingId)
                 .update(
                     mapOf(
                         "checkInDate" to newCheckIn,
@@ -69,40 +72,36 @@ class FirestoreBookingRepository(
     }
 
     override fun getBookingsByUser(userId: String): Flow<List<Booking>> = callbackFlow {
-        val listener = bookingsCollection
-            .whereEqualTo("userId", userId)
-            .addSnapshotListener { snapshot, e ->
+        val reg = bookings.whereEqualTo("userId", userId)
+            .addSnapshotListener { snap, e ->
                 if (e != null) close(e)
-                else trySend(snapshot?.toObjects(Booking::class.java) ?: emptyList())
+                else trySend(snap?.toObjects<Booking>() ?: emptyList())
             }
-        awaitClose { listener.remove() }
+        awaitClose { reg.remove() }
     }
 
     override fun getBookingsByHost(hostId: String): Flow<List<Booking>> = callbackFlow {
-        val listener = bookingsCollection
-            .whereEqualTo("hostId", hostId)
-            .addSnapshotListener { snapshot, e ->
+        val reg = bookings.whereEqualTo("hostId", hostId)
+            .addSnapshotListener { snap, e ->
                 if (e != null) close(e)
-                else trySend(snapshot?.toObjects(Booking::class.java) ?: emptyList())
+                else trySend(snap?.toObjects<Booking>() ?: emptyList())
             }
-        awaitClose { listener.remove() }
+        awaitClose { reg.remove() }
     }
 
     override fun getBookingsByHome(homeId: String): Flow<List<Booking>> = callbackFlow {
-        val listener = bookingsCollection
-            .whereEqualTo("homeId", homeId)
-            .addSnapshotListener { snapshot, e ->
+        val reg = bookings.whereEqualTo("homeId", homeId)
+            .addSnapshotListener { snap, e ->
                 if (e != null) close(e)
-                else trySend(snapshot?.toObjects(Booking::class.java) ?: emptyList())
+                else trySend(snap?.toObjects<Booking>() ?: emptyList())
             }
-        awaitClose { listener.remove() }
+        awaitClose { reg.remove() }
     }
 
     override suspend fun getBookingById(bookingId: String): Booking? {
         return try {
-            bookingsCollection.document(bookingId).get().await()
-                .toObject(Booking::class.java)
-        } catch (e: Exception) {
+            bookings.document(bookingId).get().await().toObject(Booking::class.java)
+        } catch (_: Exception) {
             null
         }
     }
@@ -113,12 +112,12 @@ class FirestoreBookingRepository(
         transactionId: String?
     ): Result<Unit> {
         return try {
-            val updateData = mutableMapOf<String, Any>(
+            val data = mutableMapOf<String, Any>(
                 "paymentStatus" to paymentStatus,
                 "updatedAt" to Date()
             )
-            transactionId?.let { updateData["transactionId"] = it }
-            bookingsCollection.document(bookingId).update(updateData).await()
+            if (transactionId != null) data["transactionId"] = transactionId
+            bookings.document(bookingId).update(data).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -1,117 +1,179 @@
 package com.example.homestay.data.repository
 
-import android.util.Log
-import com.example.homestay.data.model.HomeFirebase
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.suspendCancellableCoroutine
+import android.content.Context
 import android.net.Uri
+import android.util.Log
+import com.example.homestay.data.model.Booking
+import com.example.homestay.data.model.HomeFirebase
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ktx.toObjects
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import java.util.Date
 import java.util.UUID
+import com.google.firebase.firestore.ktx.toObject
 
-import android.content.Context
 class FirebaseRepository {
-    private val db = FirebaseFirestore.getInstance()
-    private val homesCollection = db.collection("homes")
 
+    private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
+    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val storage: FirebaseStorage by lazy { FirebaseStorage.getInstance() }
+
+
+    // Collections
+    private val homesCol get() = db.collection("homes")
+    private val bookingsCol get() = db.collection("bookings")
+
+    // -------------------------------
+    // HOMES
+    // -------------------------------
+
+    /** Simple set (no photos). */
     suspend fun addHomeToFirebase(home: HomeFirebase) {
-        homesCollection.document(home.id).set(home)
-            .addOnSuccessListener {
-                println("Home saved successfully")
-            }
-            .addOnFailureListener { e ->
-                println("Error saving home: $e")
-            }
-    }
-
-    private suspend fun uploadImagesToStorage(photoUris: List<Uri>): List<String> {
-        if (photoUris.isEmpty()) return emptyList()
-        val storage = FirebaseStorage.getInstance().reference
-        val urls = mutableListOf<String>()
-        for (uri in photoUris) {
-            val path = "homes/${UUID.randomUUID()}.jpg"
-            val ref = storage.child(path)
-            ref.putFile(uri).await()                    // upload
-            val url = ref.downloadUrl.await().toString()// get HTTPS download URL
-            urls += url
-        }
-        return urls
+        homesCol.document(home.id).set(home).await()
     }
 
     /**
-     * New: upload images -> write HomeFirebase (with imageUrls) to Firestore.
-     * Keeps addHomeToFirebase(...) untouched for compatibility.
+     * Upload photos to Storage under /homes/{homeId}/photo_{i}.jpg,
+     * then save Firestore doc with the HTTPS download URLs.
+     *
+     * Keeps compatibility with your HomeFirebase model (expects imageUrls, hostId fields).
      */
-    // FirebaseRepository.kt (or wherever you upload)
     suspend fun addHomeWithPhotos(
         context: Context,
         base: HomeFirebase,
         photoUris: List<Uri>
     ) {
-        val auth = FirebaseAuth.getInstance()
-        val firestore = FirebaseFirestore.getInstance()
-        val storage = FirebaseStorage.getInstance()
-
         val uid = auth.currentUser?.uid ?: error("Not signed in")
-        val homeId = if (base.id.isNotEmpty()) base.id else firestore.collection("homes").document().id
+        val homeId = base.id.ifEmpty { homesCol.document().id }
         val folderRef = storage.reference.child("homes").child(homeId)
 
         val urls = mutableListOf<String>()
 
         withContext(Dispatchers.IO) {
             for ((i, uri) in photoUris.withIndex()) {
-                // 1) Can we open it?
                 val input = context.contentResolver.openInputStream(uri)
                     ?: throw IllegalArgumentException("Cannot open image: $uri")
 
                 try {
-                    // 2) Upload
                     val ref = folderRef.child("photo_$i.jpg")
                     ref.putStream(input).await()
-
-                    // 3) URL
                     val url = ref.downloadUrl.await().toString()
                     urls += url
                 } finally {
-                    // Always close
                     try { input.close() } catch (_: Exception) {}
                 }
             }
 
             val data = base.copy(
                 id = homeId,
-                // include these only if your model has them
                 hostId = uid,
                 imageUrls = urls
             )
-            firestore.collection("homes").document(homeId).set(data).await()
+            homesCol.document(homeId).set(data).await()
         }
     }
 
     suspend fun deleteHome(homeId: String) {
-        db.collection("homes")
-            .document(homeId)
-            .delete()
-            .addOnSuccessListener { Log.d("Firebase", "Home deleted") }
-            .addOnFailureListener { e -> Log.e("Firebase", "Failed to delete home", e) }
+        homesCol.document(homeId).delete().await()
+    }
+
+    suspend fun getHomesFromFirebase(): List<HomeFirebase> {
+        val snap = homesCol.get().await()
+        return snap.toObjects()
+    }
+
+    // -------------------------------
+    // BOOKINGS
+    // -------------------------------
+
+    /** Create or overwrite a booking. */
+    suspend fun saveBooking(booking: Booking): Result<Unit> = runCatching {
+        bookingsCol.document(booking.bookingId).set(booking).await()
+    }
+
+    /** Fetch all bookings for a user (one-shot). */
+    suspend fun getBookingsForUser(userId: String): List<Booking> {
+        val snap = bookingsCol.whereEqualTo("userId", userId).get().await()
+        return snap.toObjects()
+    }
+
+    /** Set status = CANCELLED and updatedAt = now. */
+    suspend fun cancelBooking(bookingId: String): Result<Unit> = runCatching {
+        bookingsCol.document(bookingId)
+            .update(mapOf("status" to "CANCELLED", "updatedAt" to Date()))
+            .await()
+    }
+
+    /** Update dates, set status = RESCHEDULED, and updatedAt = now. */
+    suspend fun rescheduleBooking(
+        bookingId: String,
+        newCheckIn: Date,
+        newCheckOut: Date
+    ): Result<Unit> = runCatching {
+        bookingsCol.document(bookingId).update(
+            mapOf(
+                "checkInDate" to newCheckIn,
+                "checkOutDate" to newCheckOut,
+                "status" to "RESCHEDULED",
+                "updatedAt" to Date()
+            )
+        ).await()
+    }
+
+    /**
+     * Update payment status (e.g., "PAID", "PENDING", "FAILED"),
+     * optionally attach a transactionId, and bump updatedAt.
+     */
+    suspend fun updatePaymentStatus(
+        bookingId: String,
+        paymentStatus: String = "PAID",
+        transactionId: String? = null
+    ): Result<Unit> = runCatching {
+        val data = mutableMapOf<String, Any>(
+            "paymentStatus" to paymentStatus,
+            "updatedAt" to Date()
+        )
+        if (transactionId != null) data["transactionId"] = transactionId
+        bookingsCol.document(bookingId).update(data).await()
+    }
+
+    suspend fun getBookingById(bookingId: String): Booking? {
+        val doc = bookingsCol.document(bookingId).get().await()
+        return doc.toObject<Booking>()
+    }
+
+    suspend fun getBookingsForHome(homeId: String): List<Booking> {
+        val snap = bookingsCol
+            .whereEqualTo("homeId", homeId)
+            .get()
+            .await()
+        return snap.toObjects()
     }
 
 
-    suspend fun getHomesFromFirebase(): List<HomeFirebase> = suspendCancellableCoroutine { cont ->
-        homesCollection.get()
-            .addOnSuccessListener { result ->
-                val homes = result.map { it.toObject(HomeFirebase::class.java) }
-                cont.resume(homes) {}
-            }
-            .addOnFailureListener { e ->
-                cont.resumeWith(Result.success(emptyList()))
-            }
+    suspend fun getBookingsForHost(hostId: String): List<Booking> {
+        val snap = bookingsCol
+            .whereEqualTo("hostId", hostId)
+            .get()
+            .await()
+        return snap.toObjects()
+    }
+
+    private suspend fun uploadImagesToStorage(photoUris: List<Uri>): List<String> {
+        if (photoUris.isEmpty()) return emptyList()
+        val root = storage.reference.child("homes/${UUID.randomUUID()}")
+        val urls = mutableListOf<String>()
+        for ((i, uri) in photoUris.withIndex()) {
+            val ref = root.child("photo_$i.jpg")
+            ref.putFile(uri).await()
+            urls += ref.downloadUrl.await().toString()
+        }
+        return urls
     }
 
 
 }
-
-

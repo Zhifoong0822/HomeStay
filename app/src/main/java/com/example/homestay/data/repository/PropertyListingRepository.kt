@@ -1,5 +1,6 @@
 package com.example.homestay.data.repository
 
+import android.net.Uri
 import com.example.homestay.data.local.HomeDao
 import com.example.homestay.data.local.HomeEntity
 import com.example.homestay.data.local.HomestayPriceDao
@@ -7,21 +8,15 @@ import com.example.homestay.data.local.PromotionDao
 import com.example.homestay.data.model.CheckStatus
 import com.example.homestay.data.model.Home
 import com.example.homestay.data.model.HomeWithDetails
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import android.net.Uri
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
-
 
 class PropertyListingRepository(
     private val homeDao: HomeDao,
@@ -31,94 +26,24 @@ class PropertyListingRepository(
     private val _homes = MutableStateFlow<List<Home>>(emptyList())
     val homes: StateFlow<List<Home>> = _homes.asStateFlow()
 
-    // keyed by (userId, homeId)
+    // keyed by (userId|homeId)
     private val _checkMap = MutableStateFlow<Map<String, CheckStatus>>(emptyMap())
     val checkMap: StateFlow<Map<String, CheckStatus>> = _checkMap.asStateFlow()
 
     init {
-        // Launch a coroutine to observe DB changes
+        // stream local DB to _homes
         CoroutineScope(Dispatchers.IO).launch {
             homeDao.getAllHomesFlow().collect { entities ->
                 _homes.value = entities.map { it.toHome() }
             }
         }
     }
-    // ---- Host ops ----
-    suspend fun addHome(home: Home) {
-        homeDao.insertHome(home.toEntity())
-    }
 
-    suspend fun updateHome(home: Home) {
-        homeDao.updateHome(home.toEntity())
-    }
+    // ---------------- Local (Room) ----------------
 
-    suspend fun removeHome(id: String) {
-        homeDao.deleteHomeById(id)
-    }
-
-
-    suspend fun uploadImagesToStorage(uris: List<Uri>): List<String> {
-        val storage = FirebaseStorage.getInstance().reference
-        val urls = mutableListOf<String>()
-        for (uri in uris) {
-            val filename = "homes/${UUID.randomUUID()}.jpg"
-            val ref = storage.child(filename)
-            ref.putFile(uri).await()
-            urls += ref.downloadUrl.await().toString()
-        }
-        return urls
-    }
-
-    // Save a new Home to Firestore (after upload images)
-    suspend fun addHomeToCloud(name: String, location: String, desc: String, photoUris: List<Uri>, hostId: String) {
-        val imageUrls = uploadImagesToStorage(photoUris)
-        val homeId = UUID.randomUUID().toString()
-        val home = Home(
-            id = homeId,
-            name = name,
-            location = location,
-            description = desc,
-            photoUris = imageUrls,
-            hostId = hostId
-        )
-        FirebaseFirestore.getInstance()
-            .collection("homes")
-            .document(homeId)
-            .set(home)
-            .await()
-    }
-
-    // Live stream of all homes from Firestore
-    fun homesFromCloud(): Flow<List<Home>> = callbackFlow {
-        val reg = FirebaseFirestore.getInstance()
-            .collection("homes")
-            .addSnapshotListener { snap, err ->
-                if (err != null) {
-                    close(err)
-                    return@addSnapshotListener
-                }
-                val list = snap?.documents?.mapNotNull { it.toObject(Home::class.java) } ?: emptyList()
-                trySend(list)
-            }
-        awaitClose { reg.remove() }
-    }
-
-
-    // ---- Client ops ----
-    suspend fun toggleCheckInOut(homeId: String, userId: String) {
-        val key = "$userId|$homeId"
-        val current = _checkMap.value[key]
-        val next = if (current?.checkedIn == true) {
-            current.copy(checkedIn = false, timestampMs = System.currentTimeMillis())
-        } else {
-            CheckStatus(homeId, userId, checkedIn = true)
-        }
-        _checkMap.value = _checkMap.value.toMutableMap().apply { put(key, next) }
-    }
-
-    fun checkStatus(homeId: String, userId: String): CheckStatus? {
-        return _checkMap.value["$userId|$homeId"]
-    }
+    suspend fun addHome(home: Home) = homeDao.insertHome(home.toEntity())
+    suspend fun updateHome(home: Home) = homeDao.updateHome(home.toEntity())
+    suspend fun removeHome(id: String) = homeDao.deleteHomeById(id)
 
     suspend fun addOrUpdateHome(home: Home) {
         homeDao.insertHome(
@@ -132,9 +57,7 @@ class PropertyListingRepository(
         )
     }
 
-    suspend fun getHomesByHostId(hostId: String): List<HomeEntity> {
-        return homeDao.getHomesByHostId(hostId)
-    }
+    suspend fun getHomesByHostId(hostId: String) = homeDao.getHomesByHostId(hostId)
 
     suspend fun getHomeWithDetails(id: String): HomeWithDetails? {
         val homeEntity = homeDao.getHomeById(id) ?: return null
@@ -149,8 +72,115 @@ class PropertyListingRepository(
         )
     }
 
-    // Extension functions for mapping
-    fun HomeEntity.toHome(): Home = Home(
+    // ---------------- Firestore + Storage ----------------
+
+    private suspend fun uploadImagesToStorage(uris: List<Uri>): List<String> {
+        if (uris.isEmpty()) return emptyList()
+        val storage = FirebaseStorage.getInstance().reference
+        val urls = mutableListOf<String>()
+        for (uri in uris) {
+            val filename = "homes/${UUID.randomUUID()}.jpg"
+            val ref = storage.child(filename)
+            ref.putFile(uri).await()
+            urls += ref.downloadUrl.await().toString()
+        }
+        return urls
+    }
+
+    /**
+     * Upload images to Storage, then create a Home document in Firestore.
+     * Writes BOTH `imageUrls` and `photoUris` for backward compatibility.
+     */
+    suspend fun addHomeToCloud(
+        name: String,
+        location: String,
+        desc: String,
+        photoUris: List<Uri>,
+        hostId: String
+    ) {
+        val imageUrls = uploadImagesToStorage(photoUris)
+        val homeId = UUID.randomUUID().toString()
+
+        // Write as a map so we can control field names.
+        val data = hashMapOf(
+            "id" to homeId,
+            "hostId" to hostId,
+            "name" to name,
+            "location" to location,
+            "description" to desc,
+            // new canonical field
+            "imageUrls" to imageUrls,
+            // legacy field so old readers keep working
+            "photoUris" to imageUrls
+        )
+
+        FirebaseFirestore.getInstance()
+            .collection("homes")
+            .document(homeId)
+            .set(data)
+            .await()
+    }
+
+    /**
+     * Live stream of homes from Firestore.
+     * Accepts either `imageUrls` or `photoUris` from the document
+     * and maps into Home.photoUris so UI loads images.
+     */
+    fun homesFromCloud(): Flow<List<Home>> = callbackFlow {
+        val reg = FirebaseFirestore.getInstance()
+            .collection("homes")
+            .addSnapshotListener { snap, err ->
+                if (err != null) {
+                    close(err)
+                    return@addSnapshotListener
+                }
+                val list = snap?.documents?.map { doc ->
+                    val id = doc.getString("id") ?: doc.id
+                    val hostId = doc.getString("hostId").orEmpty()
+                    val name = doc.getString("name").orEmpty()
+                    val location = doc.getString("location").orEmpty()
+                    val description = doc.getString("description").orEmpty()
+
+                    // Read either field name; prefer new imageUrls
+                    @Suppress("UNCHECKED_CAST")
+                    val imageUrls = (doc.get("imageUrls") as? List<*>)?.filterIsInstance<String>()
+                        ?: (doc.get("photoUris") as? List<*>)?.filterIsInstance<String>()
+                        ?: emptyList()
+
+                    Home(
+                        id = id,
+                        name = name,
+                        location = location,
+                        description = description,
+                        hostId = hostId,
+                        // map into existing UI field
+                        photoUris = imageUrls
+                    )
+                } ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { reg.remove() }
+    }
+
+    // ---------------- Client check-in/out demo state ----------------
+
+    suspend fun toggleCheckInOut(homeId: String, userId: String) {
+        val key = "$userId|$homeId"
+        val current = _checkMap.value[key]
+        val next = if (current?.checkedIn == true) {
+            current.copy(checkedIn = false, timestampMs = System.currentTimeMillis())
+        } else {
+            CheckStatus(homeId, userId, checkedIn = true)
+        }
+        _checkMap.value = _checkMap.value.toMutableMap().apply { put(key, next) }
+    }
+
+    fun checkStatus(homeId: String, userId: String): CheckStatus? =
+        _checkMap.value["$userId|$homeId"]
+
+    // ---------------- Mappers ----------------
+
+    private fun HomeEntity.toHome(): Home = Home(
         id = id,
         name = name,
         location = location,
@@ -158,7 +188,7 @@ class PropertyListingRepository(
         hostId = hostId
     )
 
-    fun Home.toEntity(): HomeEntity = HomeEntity(
+    private fun Home.toEntity(): HomeEntity = HomeEntity(
         id = id,
         name = name,
         location = location,
@@ -166,4 +196,3 @@ class PropertyListingRepository(
         hostId = hostId
     )
 }
-

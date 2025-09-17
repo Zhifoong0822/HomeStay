@@ -42,9 +42,6 @@ import com.example.homestay.ui.Profile.ProfileScreen
 import com.example.homestay.ui.SignUp.SignUpScreen
 import com.example.homestay.ui.addPromo.AddPromoScreen
 import com.example.homestay.ui.booking.BookingViewModel
-import com.example.homestay.ui.booking.CancelBookingScreen
-import com.example.homestay.ui.booking.PaymentScreen
-import com.example.homestay.ui.booking.RescheduleBookingScreen
 import com.example.homestay.ui.property.HostAddOrEditHomeScreen
 import com.example.homestay.ui.property.PropertyListingViewModel
 import com.example.homestay.ui.client.ClientBrowseScreen
@@ -54,8 +51,6 @@ import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.homestay.data.repository.FirestoreBookingRepository
-import com.example.homestay.ui.booking.BookingScreen
-
 
 // ✅ Added ClientBrowse
 enum class HomeStayScreen {
@@ -76,6 +71,9 @@ class MainActivity : ComponentActivity() {
     private val authViewModel: AuthViewModel by viewModels {
         AuthViewModelFactory(applicationContext, dataStoreManager)
     }
+
+    val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -342,6 +340,7 @@ fun HomeStayApp(
         LaunchedEffect(isLoggedIn, uiState.userProfile) {
             val profile = uiState.userProfile
             if (isLoggedIn && profile != null) {
+
                 when (profile.role) {
                     "Host" -> {
                         Log.d("NAVIGATION", "Navigating as Host -> HostHome")
@@ -353,6 +352,8 @@ fun HomeStayApp(
                     }
                     "Guest" -> {
                         Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
+                        bookingVM.setCurrentUser(profile.userId)
+                        bookingVM.loadUserBookings(profile.userId)
                         navController.navigate(HomeStayScreen.ClientBrowse.name) {
                             popUpTo(0) { inclusive = true }
                         }

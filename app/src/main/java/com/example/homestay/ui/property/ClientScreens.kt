@@ -22,7 +22,7 @@ fun ClientHomeListScreen(
     val homes by vm.homes.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Available Homes") }) }
+        topBar = { TopAppBar(title = { Text("SKY BNB") }) }
     ) { pad ->
         Column(
             modifier = Modifier

@@ -4,17 +4,27 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.homestay.data.model.Booking
 import com.example.homestay.data.repository.BookingRepository
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.*
+import java.util.Date
 
 class BookingViewModel(
     private val bookingRepository: BookingRepository
 ) : ViewModel() {
 
-    /** Stores current logged-in user ID */
-    private var currentUserId: String? = null
+    // ---- Session ----
+    private var userId: String? = null
+    fun setCurrentUser(id: String) {
+        if (userId == id) return
+        userId = id
+        loadUserBookings(id)
+    }
+    fun currentUserId(): String = userId.orEmpty()
 
+    // ---- UI State ----
     private val _bookings = MutableStateFlow<List<Booking>>(emptyList())
     val bookings: StateFlow<List<Booking>> = _bookings.asStateFlow()
 
@@ -24,113 +34,120 @@ class BookingViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    /**
-     * Sets the current userId so you don't need to keep passing it
-     */
-    fun setCurrentUser(userId: String) {
-        currentUserId = userId
-    }
+    /** Fire-and-forget messages (snackbars/toasts). */
+    val message = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
-    /**
-     * Load bookings for current user
-     */
-    fun loadUserBookings(userId: String? = currentUserId) {
-        if (userId.isNullOrEmpty()) {
+    // ---- Queries ----
+    /** Start/refresh stream of bookings for [forUserId] (or current user). */
+    fun loadUserBookings(forUserId: String? = userId) {
+        val uid = forUserId
+        if (uid.isNullOrEmpty()) {
             _error.value = "User ID is missing. Cannot load bookings."
             return
         }
-
         viewModelScope.launch {
-            bookingRepository.getBookingsByUser(userId)
-                .catch { e ->
-                    _error.value = "Failed to load bookings: ${e.message}"
+            _loading.value = true
+            try {
+                bookingRepository.getBookingsByUser(uid).collect { list ->
+                    _bookings.value = list
                 }
-                .collect { bookings ->
-                    _bookings.value = bookings
-                }
+            } catch (e: Exception) {
+                _error.value = "Failed to load bookings: ${e.message}"
+            } finally {
+                _loading.value = false
+            }
         }
     }
 
-    /**
-     * Create a new booking and refresh list
-     */
-    suspend fun createBooking(booking: Booking): Result<String> {
+    // ---- Commands ----
+    /** Create a booking and refresh list on success. */
+    suspend fun createBooking(booking: Booking): Result<Unit> {
         _loading.value = true
         return try {
-            val result = bookingRepository.createBooking(booking)
-            if (result.isSuccess) {
+            val res = bookingRepository.createBooking(booking)
+            if (res.isSuccess) {
                 loadUserBookings(booking.userId)
-                result
+                message.tryEmit("Booking successful!")
             } else {
-                Result.failure(result.exceptionOrNull() ?: Exception("Unknown error"))
+                _error.value = res.exceptionOrNull()?.message ?: "Failed to create booking"
             }
+            res
+        } catch (e: Exception) {
+            _error.value = e.message
+            Result.failure(e)
         } finally {
             _loading.value = false
         }
     }
 
-    /**
-     * Cancel booking by ID
-     */
+    /** Cancel an existing booking. */
     fun cancelBooking(bookingId: String) {
-        val userId = currentUserId ?: return
+        val uid = userId ?: return
         viewModelScope.launch {
-            val result = bookingRepository.cancelBooking(bookingId)
-            if (result.isSuccess) {
-                loadUserBookings(userId)
-            } else {
-                _error.value = result.exceptionOrNull()?.message ?: "Failed to cancel booking"
-            }
-        }
-    }
-
-    /**
-     * Reschedule booking
-     */
-    fun rescheduleBooking(bookingId: String, newCheckIn: Date, newCheckOut: Date) {
-        val userId = currentUserId ?: return
-        viewModelScope.launch {
-            val result = bookingRepository.rescheduleBooking(bookingId, newCheckIn, newCheckOut)
-            if (result.isSuccess) {
-                loadUserBookings(userId)
-            } else {
-                _error.value = result.exceptionOrNull()?.message ?: "Failed to reschedule booking"
-            }
-        }
-    }
-
-    /**
-     * Mark booking as paid with a transaction ID
-     */
-    fun payBooking(bookingId: String, transactionId: String) {
-        val userId = currentUserId ?: return
-        viewModelScope.launch {
-            val result = bookingRepository.updatePaymentStatus(bookingId, "PAID", transactionId)
-            if (result.isSuccess) {
-                loadUserBookings(userId)
-            } else {
-                _error.value = result.exceptionOrNull()?.message ?: "Failed to update payment status"
-            }
-        }
-    }
-
-    /**
-     * Mark booking as paid without a transaction ID
-     */
-    fun markBookingAsPaid(bookingId: String) {
-        val userId = currentUserId ?: return
-        viewModelScope.launch {
+            _loading.value = true
             try {
-                bookingRepository.updatePaymentStatus(bookingId, "PAID")
-                loadUserBookings(userId)
-            } catch (e: Exception) {
-                _error.value = "Failed to update payment status: ${e.message}"
+                val res = bookingRepository.cancelBooking(bookingId)
+                if (res.isSuccess) {
+                    loadUserBookings(uid)
+                    message.tryEmit("Booking cancelled")
+                } else {
+                    _error.value = res.exceptionOrNull()?.message ?: "Failed to cancel booking"
+                }
+            } finally {
+                _loading.value = false
             }
         }
     }
 
-    /** Clear error message */
-    fun clearError() {
-        _error.value = null
+    /** Reschedule dates for a booking. */
+    fun rescheduleBooking(bookingId: String, newCheckIn: Date, newCheckOut: Date) {
+        val uid = userId ?: return
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val res = bookingRepository.rescheduleBooking(bookingId, newCheckIn, newCheckOut)
+                if (res.isSuccess) {
+                    loadUserBookings(uid)
+                    message.tryEmit("Booking rescheduled")
+                } else {
+                    _error.value = res.exceptionOrNull()?.message ?: "Failed to reschedule booking"
+                }
+            } finally {
+                _loading.value = false
+            }
+        }
     }
+
+    /** Mark booking as paid and (optionally) store a transaction id. */
+    fun markBookingAsPaid(bookingId: String, transactionId: String? = null) {
+        val uid = currentUserId()
+        if (uid.isEmpty()) return
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val res = bookingRepository.updatePaymentStatus(
+                    bookingId = bookingId,
+                    paymentStatus = "PAID",
+                    transactionId = transactionId
+                )
+                if (res.isSuccess) {
+                    loadUserBookings(uid)
+                    message.tryEmit("Payment recorded")
+                } else {
+                    _error.value = res.exceptionOrNull()?.message ?: "Failed to update payment status"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    /** Convenience wrapper used by your UI. */
+    fun payBooking(bookingId: String, transactionId: String) {
+        markBookingAsPaid(bookingId, transactionId)
+    }
+
+    fun clearError() { _error.value = null }
 }

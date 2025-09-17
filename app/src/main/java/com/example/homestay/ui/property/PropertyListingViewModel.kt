@@ -20,11 +20,13 @@ class PropertyListingViewModel(
     private val handle: SavedStateHandle
 ) : ViewModel() {
 
+    val checkMap = repo.checkMap
     private var hostId: String = "" // <- store the logged-in hostId
 
     fun setHostId(id: String) {
         hostId = id
     }
+
 
     private object Keys {
         const val NAME = "draftName"
