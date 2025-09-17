@@ -20,7 +20,10 @@ data class Home(
     var location: String = "",
     var description: String = "",
     var photoUris: List<String> = emptyList(),
-    val hostId: String = ""   // default added
+    val hostId: String = ""   ,
+    val pricePerNight: Double = 0.0,
+    val imageUrls: List<String> = emptyList()
+
 )
 
 
