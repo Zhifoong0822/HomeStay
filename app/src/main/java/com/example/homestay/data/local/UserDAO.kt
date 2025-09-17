@@ -22,4 +22,7 @@ interface UserDao {
 
     @Query("SELECT * FROM users")
     suspend fun getAllUsers(): List<UserEntity>
+
+    @Query("SELECT * FROM users ORDER BY updatedAt DESC LIMIT 1")
+    suspend fun getLastUser(): UserEntity?
 }

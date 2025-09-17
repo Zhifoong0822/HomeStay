@@ -99,26 +99,9 @@ fun SignUpScreen(
     }
 
     Scaffold(
-        snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                snackbar = { snackbarData ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF446F5C)),
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = snackbarData.visuals.message,
-                            color = Color.White,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            )
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
+
         Column(
             modifier = modifier
                 .fillMaxSize()

@@ -57,7 +57,7 @@ fun LoginScreen(
     val contentPadding = if (isTablet) 40.dp else 24.dp
     val titleFontSize = if (isTablet) 36.sp else 33.sp
     val buttonHeight = if (isTablet) 56.dp else 52.dp
-    val buttonFontSize = if (isTablet) 18.sp else 16.sp
+    val buttonFontSize = if (isTablet) 20.sp else 18.sp
     val forgotPasswordFontSize = if (isTablet) 17.sp else 15.sp
 
     val gradientBackground = Brush.verticalGradient(
@@ -85,26 +85,9 @@ fun LoginScreen(
     }
 
     Scaffold(
-        snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                snackbar = { snackbarData ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF446F5C)),
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = snackbarData.visuals.message,
-                            color = Color.White,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            )
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
+
         Column(
             modifier = modifier
                 .fillMaxSize()

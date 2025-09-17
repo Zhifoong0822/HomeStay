@@ -380,12 +380,15 @@ fun HomeStayApp(
             }
         }
 
-        LaunchedEffect(isLoggedIn) {
-            if (isLoggedIn) {
-                if (uiState.userProfile != null) {
-                    navController.navigate(HomeStayScreen.HostHome.name) {
-                        popUpTo(0) { inclusive = true }
-                    }
+        LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
+            if (uiState.isAuthChecking) {
+                //still checking Firebase, stay on Logo screen
+                return@LaunchedEffect
+            }
+
+            if (uiState.isLoggedIn && uiState.userProfile != null) {
+                navController.navigate(HomeStayScreen.HostHome.name) {
+                    popUpTo(0) { inclusive = true }
                 }
             } else {
                 navController.navigate(HomeStayScreen.Logo.name) {

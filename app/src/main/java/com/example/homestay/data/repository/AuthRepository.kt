@@ -165,6 +165,22 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    suspend fun getUserFromLocal(): UserProfile? {
+        val entity = userDao.getLastUser() // <-- needs DAO function
+        return entity?.let {
+            UserProfile(
+                userId = it.userId,
+                username = it.username,
+                email = it.email,
+                gender = it.gender,
+                birthdate = it.birthdate,
+                role = it.role,
+                createdAt = it.createdAt,
+                updatedAt = it.updatedAt
+            )
+        }
+    }
+
     //Add local DB clear (logout or delete)
     suspend fun clearLocalUser(userId: String) {
         userDao.deleteUserById(userId)

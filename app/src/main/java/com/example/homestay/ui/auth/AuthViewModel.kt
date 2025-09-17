@@ -78,11 +78,30 @@ class AuthViewModel(
                 val currentUser = authRepository.getCurrentUser()
 
                 if (loggedIn && currentUser != null && currentUser.isEmailVerified) {
+                    dataStoreManager.setLoginStatus(true)
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = true,
                         isLoading = true
                     )
                     loadUserProfile(currentUser.uid)
+
+                } else if (loggedIn && currentUser == null) {
+                    //Fallback: try cached local user
+                    val localUser = authRepository.getUserFromLocal()
+                    if (localUser != null) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = true,
+                            userProfile = localUser,
+                            isLoading = false
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = false,
+                            userProfile = null,
+                            isLoading = false
+                        )
+                    }
+
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = false,
@@ -142,6 +161,8 @@ class AuthViewModel(
             try {
                 when (val result = authRepository.login(email, password)) {
                     is AuthResult.Success -> {
+                        dataStoreManager.setLoginStatus(true)
+
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
                             successMessage = if (result.data != null) {
@@ -157,10 +178,16 @@ class AuthViewModel(
                         //Load profile either from Firebase or local
                         val uid = result.data?.uid
                         if (uid != null) {
-                            loadUserProfile(uid) // Firebase profile
+                            //Fetch Firestore profile directly (so we can use it immediately)
+                            val profileResult = authRepository.getUserProfile(uid)
+                            if (profileResult is AuthResult.Success && profileResult.data != null) {
+                                val profile = profileResult.data
+                                _uiState.value = _uiState.value.copy(
+                                    userProfile = profile,
+                                    isLoggedIn = true
+                                )
 
-                            //ROOM DB INSERT AFTER LOGIN
-                            result.data?.let { firebaseUser ->
+                                // Save to Room with profile values
                                 val db = UserDatabase.getDatabase(context)
                                 val userDao = db.userDao()
                                 viewModelScope.launch(Dispatchers.IO) {
@@ -169,19 +196,23 @@ class AuthViewModel(
                                         Log.e("AuthViewModel", "Skipping Room insert - role is empty")
                                         return@launch
                                     }
+
                                     val userEntity = UserEntity(
-                                        userId = firebaseUser.uid,
-                                        email = firebaseUser.email ?: "",
+                                        userId = uid,
+                                        email = profile.email,
                                         password = "",
-                                        username = _loginState.value.email, // fallback username
-                                        gender = "",
-                                        birthdate = "",
+                                        username = profile.username,
+                                        gender = profile.gender,
+                                        birthdate = profile.birthdate,
                                         role = safeRole,
                                         createdAt = System.currentTimeMillis(),
                                         updatedAt = System.currentTimeMillis()
                                     )
                                     userDao.insertUser(userEntity)
                                 }
+                            } else {
+                                // fallback if profile failed
+                                loadUserProfile(uid)
                             }
                         } else {
                             loadLocalUserProfile(email) // Local profile
