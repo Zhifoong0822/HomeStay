@@ -253,6 +253,7 @@ fun HomeStayApp(
                                 navController.navigate(HomeStayScreen.SignUp.name)
                             })
                     }
+
                     WindowWidthSizeClass.Medium,
                     WindowWidthSizeClass.Expanded -> {
                         //Tablet layout
@@ -280,6 +281,7 @@ fun HomeStayApp(
                             onBackButtonClicked = { navController.navigate(HomeStayScreen.Logo.name) },
                             onForgotPasswordClicked = { navController.navigate(HomeStayScreen.ForgotPassword.name) })
                     }
+
                     WindowWidthSizeClass.Medium,
                     WindowWidthSizeClass.Expanded -> {
                         //Tablet layout
@@ -303,6 +305,7 @@ fun HomeStayApp(
                             viewModel = authViewModel,
                             onBackButtonClicked = { navController.popBackStack() })
                     }
+
                     WindowWidthSizeClass.Medium,
                     WindowWidthSizeClass.Expanded -> {
                         //Tablet layout
@@ -325,6 +328,7 @@ fun HomeStayApp(
                             onBackButtonClicked = { navController.popBackStack() },
                             onSuccess = { navController.navigate(HomeStayScreen.Logo.name) })
                     }
+
                     WindowWidthSizeClass.Medium,
                     WindowWidthSizeClass.Expanded -> {
                         //Tablet layout
@@ -348,7 +352,7 @@ fun HomeStayApp(
             }
 
 
-            //Profile 
+            //Profile
             composable(route = HomeStayScreen.Profile.name) {
                 when (windowSizeClass.widthSizeClass) {
                     WindowWidthSizeClass.Compact -> {
@@ -358,9 +362,10 @@ fun HomeStayApp(
                             viewModel = authViewModel,
                             onBackButtonClicked = { navController.popBackStack() },
                             onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
-                            onLogoutClicked = { authViewModel.logout()},
-                            onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name)})
+                            onLogoutClicked = { authViewModel.logout() },
+                            onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name) })
                     }
+
                     WindowWidthSizeClass.Medium,
                     WindowWidthSizeClass.Expanded -> {
                         //Tablet layout
@@ -369,8 +374,8 @@ fun HomeStayApp(
                             viewModel = authViewModel,
                             onBackButtonClicked = { navController.popBackStack() },
                             onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
-                            onLogoutClicked = { authViewModel.logout()},
-                            onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name)})
+                            onLogoutClicked = { authViewModel.logout() },
+                            onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name) })
                     }
                 }
             }
@@ -386,6 +391,7 @@ fun HomeStayApp(
                             onBackButtonClicked = { navController.popBackStack() },
                             onSaveSuccess = { navController.navigate(HomeStayScreen.Profile.name) })
                     }
+
                     WindowWidthSizeClass.Medium,
                     WindowWidthSizeClass.Expanded -> {
                         //Tablet layout
@@ -410,11 +416,13 @@ fun HomeStayApp(
                         homeVM.setHostId(profile.userId)
                         propertyVM.setHostId(profile.userId)
                     }
+
                     "Guest" -> {
                         navController.navigate("clientBrowse") {
                             popUpTo(0) { inclusive = true }
                         }
                     }
+
                     else -> {
                         // fallback, e.g. back to logo or show error
                         navController.navigate(HomeStayScreen.Logo.name) {
@@ -428,7 +436,5 @@ fun HomeStayApp(
                 }
             }
         }
-
-
     }
 }
