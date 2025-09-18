@@ -16,12 +16,11 @@ class BookingRepositoryImpl(
         Result.failure(e)
     }
 
-    override fun getBookingsByUser(userId: String): Flow<List<Booking>> = flow {
-        try {
-            emit(firebaseRepository.getBookingsForUser(userId))
-        } catch (e: Exception) {
-            emit(emptyList())
-        }
+    override suspend fun updateBooking(booking: Booking): Result<Unit> = try {
+        firebaseRepository.saveBooking(booking)
+        Result.success(Unit)
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     override suspend fun cancelBooking(bookingId: String): Result<Unit> = try {
@@ -42,13 +41,6 @@ class BookingRepositoryImpl(
         Result.failure(e)
     }
 
-    override suspend fun updateBooking(booking: Booking): Result<Unit> = try {
-        firebaseRepository.saveBooking(booking)
-        Result.success(Unit)
-    } catch (e: Exception) {
-        Result.failure(e)
-    }
-
     override suspend fun updatePaymentStatus(
         bookingId: String,
         paymentStatus: String,
@@ -60,7 +52,13 @@ class BookingRepositoryImpl(
         Result.failure(e)
     }
 
-    // ---- Missing implementations (required by the interface) ----
+    override fun getBookingsByUser(userId: String): Flow<List<Booking>> = flow {
+        try {
+            emit(firebaseRepository.getBookingsForUser(userId))
+        } catch (e: Exception) {
+            emit(emptyList())
+        }
+    }
 
     override fun getBookingsByHost(hostId: String): Flow<List<Booking>> = flow {
         try {

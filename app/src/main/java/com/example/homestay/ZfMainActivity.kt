@@ -51,6 +51,8 @@ import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.homestay.data.repository.FirestoreBookingRepository
+import com.example.homestay.ui.booking.UpdateBookingScreen
+import java.util.Date
 
 // ✅ Added ClientBrowse
 enum class HomeStayScreen {
@@ -302,11 +304,31 @@ fun HomeStayApp(
                 ClientBrowseScreen(
                     vm = propertyVM,
                     bookingVm = bookingVM,
+                    navController = navController,
                     onBottomHome = { navController.navigate(HomeStayScreen.ClientBrowse.name) },
                     onBottomExplore = { /* current */ },
                     onBottomProfile = { navController.navigate(HomeStayScreen.Profile.name) }
                 )
             }
+            composable("updateBooking") {
+                val savedStateHandle = navController.previousBackStackEntry?.savedStateHandle
+                val bookingId = savedStateHandle?.get<String>("bookingId") ?: ""
+                val currentGuests = savedStateHandle?.get<Int>("currentGuests") ?: 1
+                val currentNights = savedStateHandle?.get<Int>("currentNights") ?: 1
+                val currentCheckInMillis = savedStateHandle?.get<Long>("currentCheckIn") ?: System.currentTimeMillis()
+                val currentCheckInDate = Date(currentCheckInMillis)
+
+                UpdateBookingScreen(
+                    bookingVm = bookingVM,
+                    bookingId = bookingId,
+                    currentGuests = currentGuests,
+                    currentNights = currentNights,
+                    currentCheckIn = currentCheckInDate,
+                    navController = navController
+                )
+            }
+
+
 
             // Profile
             composable(HomeStayScreen.Profile.name) {

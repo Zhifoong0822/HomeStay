@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import java.util.Date
 
 class BookingViewModel(
@@ -17,11 +18,13 @@ class BookingViewModel(
 
     // ---- Session ----
     private var userId: String? = null
+
     fun setCurrentUser(id: String) {
         if (userId == id) return
         userId = id
         loadUserBookings(id)
     }
+
     fun currentUserId(): String = userId.orEmpty()
 
     // ---- UI State ----
@@ -60,6 +63,7 @@ class BookingViewModel(
     }
 
     // ---- Commands ----
+
     /** Create a booking and refresh list on success. */
     suspend fun createBooking(booking: Booking): Result<Unit> {
         _loading.value = true
@@ -80,6 +84,45 @@ class BookingViewModel(
         }
     }
 
+    fun updateBookingDetails(bookingId: String, newGuests: Int, newNights: Int, newCheckIn: Date) {
+        val uid = currentUserId()
+        if (uid.isEmpty()) return
+
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val newCheckOut = Calendar.getInstance().apply {
+                    time = newCheckIn
+                    add(Calendar.DAY_OF_YEAR, newNights)
+                }.time
+
+                val booking = bookingRepository.getBookingById(bookingId)
+                if (booking != null) {
+                    val updatedBooking = booking.copy(
+                        numberOfGuests = newGuests,
+                        nights = newNights,
+                        checkInDate = newCheckIn,
+                        checkOutDate = newCheckOut
+                    )
+                    val res = bookingRepository.updateBooking(updatedBooking)
+                    if (res.isSuccess) {
+                        loadUserBookings(uid)
+                        message.tryEmit("Booking updated successfully!")
+                    } else {
+                        _error.value = res.exceptionOrNull()?.message ?: "Failed to update booking"
+                    }
+                } else {
+                    _error.value = "Booking not found"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+
     /** Cancel an existing booking. */
     fun cancelBooking(bookingId: String) {
         val uid = userId ?: return
@@ -89,10 +132,12 @@ class BookingViewModel(
                 val res = bookingRepository.cancelBooking(bookingId)
                 if (res.isSuccess) {
                     loadUserBookings(uid)
-                    message.tryEmit("Booking cancelled")
+                    message.tryEmit("Booking cancelled successfully")
                 } else {
                     _error.value = res.exceptionOrNull()?.message ?: "Failed to cancel booking"
                 }
+            } catch (e: Exception) {
+                _error.value = e.message
             } finally {
                 _loading.value = false
             }
@@ -108,10 +153,12 @@ class BookingViewModel(
                 val res = bookingRepository.rescheduleBooking(bookingId, newCheckIn, newCheckOut)
                 if (res.isSuccess) {
                     loadUserBookings(uid)
-                    message.tryEmit("Booking rescheduled")
+                    message.tryEmit("Booking rescheduled successfully")
                 } else {
                     _error.value = res.exceptionOrNull()?.message ?: "Failed to reschedule booking"
                 }
+            } catch (e: Exception) {
+                _error.value = e.message
             } finally {
                 _loading.value = false
             }
@@ -132,7 +179,7 @@ class BookingViewModel(
                 )
                 if (res.isSuccess) {
                     loadUserBookings(uid)
-                    message.tryEmit("Payment recorded")
+                    message.tryEmit("Payment recorded successfully")
                 } else {
                     _error.value = res.exceptionOrNull()?.message ?: "Failed to update payment status"
                 }
@@ -144,10 +191,12 @@ class BookingViewModel(
         }
     }
 
-    /** Convenience wrapper used by your UI. */
+    /** Convenience wrapper used by UI to handle payments easily. */
     fun payBooking(bookingId: String, transactionId: String) {
         markBookingAsPaid(bookingId, transactionId)
     }
 
-    fun clearError() { _error.value = null }
+    fun clearError() {
+        _error.value = null
+    }
 }
