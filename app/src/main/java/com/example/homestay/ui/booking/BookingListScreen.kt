@@ -16,7 +16,7 @@ fun BookingListScreen(
     bookingVm: BookingViewModel,
     userId: String,
     onBookingClick: (Booking) -> Unit
-) {
+) { 
     val bookings by bookingVm.bookings.collectAsState()
     val loading by bookingVm.loading.collectAsState()
 
