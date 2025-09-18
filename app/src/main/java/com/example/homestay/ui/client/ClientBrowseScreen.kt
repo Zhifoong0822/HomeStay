@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.example.homestay.data.model.Booking
 import com.example.homestay.data.model.Home
@@ -41,6 +42,7 @@ fun ClientBrowseScreen(
     vm: PropertyListingViewModel,
     bookingVm: BookingViewModel,
     onBottomHome: () -> Unit,
+    navController: NavController,
     onBottomExplore: () -> Unit, // kept for compatibility (unused)
     onBottomProfile: () -> Unit
 ) {

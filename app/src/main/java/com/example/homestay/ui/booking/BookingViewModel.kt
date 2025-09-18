@@ -62,6 +62,22 @@ class BookingViewModel(
         }
     }
 
+    fun loadHostBookings(forHostId: String) {
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                bookingRepository.getBookingsByHost(forHostId).collect { list ->
+                    _bookings.value = list
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to load host bookings: ${e.message}"
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+
     // ---- Commands ----
 
     /** Create a booking and refresh list on success. */
@@ -142,6 +158,36 @@ class BookingViewModel(
                 _loading.value = false
             }
         }
+    }
+
+    fun updateBooking(booking: Booking) {
+        val uid = userId ?: return
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val res = bookingRepository.updateBooking(booking)
+                if (res.isSuccess) {
+                    // reload bookings depending on whether it’s guest or host
+                    loadUserBookings(uid)
+                    message.tryEmit("Booking updated")
+                } else {
+                    _error.value = res.exceptionOrNull()?.message ?: "Failed to update booking"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+
+    fun updateBookingStatus(booking: Booking, newStatus: String) {
+        val updated = booking.copy(
+            status = newStatus,
+            updatedAt = java.util.Date()
+        )
+        updateBooking(updated)
     }
 
     /** Reschedule dates for a booking. */

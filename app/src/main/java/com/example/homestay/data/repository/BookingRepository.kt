@@ -7,6 +7,7 @@ import java.util.Date
 interface BookingRepository {
     suspend fun createBooking(booking: Booking): Result<Unit>
     suspend fun updateBooking(booking: Booking): Result<Unit>
+    suspend fun updateBookingStatus(bookingId: String, status: String): Result<Unit>
 
     suspend fun cancelBooking(bookingId: String): Result<Unit>
     suspend fun rescheduleBooking(

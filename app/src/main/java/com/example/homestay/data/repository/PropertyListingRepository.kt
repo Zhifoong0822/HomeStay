@@ -59,6 +59,10 @@ class PropertyListingRepository(
 
     suspend fun getHomesByHostId(hostId: String) = homeDao.getHomesByHostId(hostId)
 
+    fun observeHomesByHostId(hostId: String): Flow<List<HomeEntity>> {
+        return homeDao.observeHomesByHostId(hostId)
+    }
+
     suspend fun getHomeWithDetails(id: String): HomeWithDetails? {
         val homeEntity = homeDao.getHomeById(id) ?: return null
         val price = homestayPriceDao.getPriceForHome(id)?.price

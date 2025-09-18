@@ -56,14 +56,14 @@ fun HostAddOrEditHomeScreen(
 
     LaunchedEffect(hostId) {
         if (!hostId.isNullOrBlank()) {
-            Log.d("DEBUG_HOMES", "Loading homes for hostId='$hostId'")
-            homeVM.setHostId(hostId)
-            homeVM.loadHostHomes(hostId)
+            Log.d("DEBUG_HOMES", "Setting hostId='$hostId'")
+            homeVM.setHostId(hostId)   // This triggers the observer in init
         } else {
             Log.d("DEBUG_HOMES", "No hostId found — clearing homes")
             homeVM.clearHomes()
         }
     }
+
 
     val homes by homeVM.homesWithDetails.collectAsState(initial = emptyList())
     val homeDetails: HomeWithDetails? = homeId?.let { id -> homes.firstOrNull { it.id == id } }

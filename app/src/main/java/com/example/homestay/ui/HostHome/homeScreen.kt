@@ -29,6 +29,7 @@ import java.net.URLEncoder
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.lazy.grid.items
 import com.example.homestay.HomeStayScreen
+import com.google.firebase.auth.FirebaseAuth
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +93,7 @@ fun HomeScreen(
                 contentColor = Color.White
             )
         },
+
         containerColor = Color(0xFFFEF9F3),
         bottomBar = {
             HostBottomBar(navController)
@@ -278,12 +280,15 @@ fun HomestayCard(
 
 @Composable
 fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavController) {
-    // Collect homes from Room / StateFlow
     val homes by homeVM.homesWithDetails.collectAsState()
 
-    // Run the sync from Firebase once when screen loads
-    LaunchedEffect(Unit) {
-        homeVM.syncHomesFromFirebase() // suspend function called safely in coroutine
+    val hostId = FirebaseAuth.getInstance().currentUser?.uid
+
+    LaunchedEffect(hostId) {
+        if (hostId != null) {
+            homeVM.setHostId(hostId)
+            homeVM.syncHomesFromFirebase(hostId)
+        }
     }
 
     HomeScreen(
@@ -292,9 +297,7 @@ fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavContro
         onAddHomeClick = { navController.navigate("addHome") },
         onEditClick = { homestay -> navController.navigate("editHome/${homestay.id}") },
         onDeleteClick = { homestay ->
-            // Delete both Room & Firebase
-            homeVM.removeHome(homestay.id)  // Room
-            homeVM.deleteHomeCompletely(homestay.id) // Firebase
+            homeVM.deleteHomeCompletely(homestay.id)
         },
         onAddPromoClick = { homestay ->
             val encodedName = URLEncoder.encode(homestay.baseInfo.name, "UTF-8")
@@ -303,3 +306,4 @@ fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavContro
         navController = navController
     )
 }
+

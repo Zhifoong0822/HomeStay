@@ -14,6 +14,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.runtime.getValue
 import com.example.homestay.HomeStayScreen
+import com.google.firebase.auth.FirebaseAuth
 
 
 @Composable
@@ -23,10 +24,11 @@ fun HostBottomBar(navController: NavController) {
 
     NavigationBar(containerColor = Color.White) {
         NavigationBarItem(
-            selected = currentRoute == "bookingRequests",
+            selected = currentRoute?.startsWith("bookingRequests") == true,
             onClick = {
-                if (currentRoute != "bookingRequests") {
-                    navController.navigate("bookingRequests") {
+                if (currentRoute?.startsWith("bookingRequests") != true) {
+                    val hostId = FirebaseAuth.getInstance().currentUser?.uid ?: return@NavigationBarItem
+                    navController.navigate("bookingRequests/$hostId") {
                         popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
@@ -36,6 +38,7 @@ fun HostBottomBar(navController: NavController) {
             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Requests") },
             label = { Text("Booking Requests") }
         )
+
         NavigationBarItem(
             selected = currentRoute == HomeStayScreen.HostHome.name,
             onClick = {

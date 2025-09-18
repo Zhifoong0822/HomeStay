@@ -29,33 +29,15 @@
         val hostHomes: StateFlow<List<HomeEntity>> = _hostHomes
 
         init {
-            // Automatically load homes whenever hostId is set (including first login)
+            // ✅ Whenever hostId changes, observe Room
             _hostId
-                .filterNotNull()               // ignore null hostIds
-                .distinctUntilChanged()        // only react to changes
-                .onEach { hostId ->
-                    Log.d("DEBUG_HOMES", "HostId detected: $hostId")
-                    loadHostHomes(hostId)
+                .filterNotNull()
+                .distinctUntilChanged()
+                .flatMapLatest { hostId ->
+                    propertyRepo.observeHomesByHostId(hostId)
                 }
-                .launchIn(viewModelScope)      // launches immediately
-        }
-
-        fun clearHomes() {
-            _homesWithDetails.value = emptyList()
-        }
-
-        fun loadHostHomes(hostId: String) {
-            _homesWithDetails.value = emptyList() // clear previous homes
-            Log.d("DEBUG_HOMES", "Starting to load homes for hostId: $hostId")
-
-            viewModelScope.launch {
-                try {
-                    // --- 1. Load from local DB ---
-                    val localHomes: List<HomeEntity> = propertyRepo.getHomesByHostId(hostId)
-                    Log.d("DEBUG_HOMES", "Local homes fetched: ${localHomes.size}")
-                    localHomes.forEach { Log.d("DEBUG_HOMES", "Local Home: ${it.name}, hostId: ${it.hostId}") }
-
-                    val localHomesWithDetails: List<HomeWithDetails> = localHomes.map { home ->
+                .onEach { localHomes ->
+                    _homesWithDetails.value = localHomes.map { home ->
                         val price = homestayRepo.getPriceForHome(home.id)?.price
                         val promo = homestayRepo.getPromotionForHome(home.id)
 
@@ -67,31 +49,14 @@
                             checkStatus = null
                         )
                     }
-
-                    // --- 2. Load from Firebase ---
-                    val firebaseHomes = firebaseRepo.getHomesFromFirebase()
-                    Log.d("DEBUG_HOMES", "Firebase homes fetched: ${firebaseHomes.size}")
-                    firebaseHomes.forEach { Log.d("DEBUG_HOMES", "Firebase Home: ${it.name}, hostId: ${it.hostId}") }
-
-                    val firebaseHomesWithDetails: List<HomeWithDetails> = firebaseHomes
-                        .filter { it.hostId == hostId }
-                        .map { it.toHomeWithDetails() }
-
-                    Log.d("DEBUG_HOMES", "Firebase homes after filtering: ${firebaseHomesWithDetails.size}")
-
-                    // --- Combine and remove duplicates ---
-                    _homesWithDetails.value = (localHomesWithDetails + firebaseHomesWithDetails)
-                        .distinctBy { it.id }
-
-                    Log.d("DEBUG_HOMES", "Final combined homes count: ${_homesWithDetails.value.size}")
-                    _homesWithDetails.value.forEach {
-                        Log.d("DEBUG_HOMES", "Home: ${it.baseInfo.name}, ID: ${it.id}, Price: ${it.price}, Promo: ${it.promotion?.description}")
-                    }
-
-                } catch (e: Exception) {
-                    Log.e("DEBUG_HOMES", "Error loading homes: ${e.message}", e)
                 }
-            }
+                .launchIn(viewModelScope)
+        }
+
+
+
+        fun clearHomes() {
+            _homesWithDetails.value = emptyList()
         }
 
 
@@ -157,33 +122,45 @@
             }
         }
 
-        fun syncHomesFromFirebase() {
+        // ✅ Sync Firebase homes into Room
+        fun syncHomesFromFirebase(hostId: String) {
             viewModelScope.launch {
-                val firebaseHomes = firebaseRepo.getHomesFromFirebase()
-                firebaseHomes.forEach { homeFirebase ->
-                    val home = Home(
-                        id = homeFirebase.id,
-                        name = homeFirebase.name,
-                        location = homeFirebase.location,
-                        description = homeFirebase.description,
-                        hostId = homeFirebase.hostId
-                    )
-                    propertyRepo.addOrUpdateHome(home)
+                try {
+                    val firebaseHomes = firebaseRepo.getHomesFromFirebase()
+                        .filter { it.hostId == hostId }
 
-                    homeFirebase.price?.let { price ->
-                        homestayRepo.insertPrice(HomestayPrice(homeId = home.id, price = price))
-                    }
-
-                    homeFirebase.promotion?.let { promo ->
-                        homestayRepo.replacePromotionForHomestay(
-                            home.id,
-                            PromotionEntity(
-                                homeId = home.id,
-                                description = promo.description,
-                                discountPercent = promo.discountPercent
-                            )
+                    firebaseHomes.forEach { homeFirebase ->
+                        // Convert Firebase → Room entity
+                        val home = Home(
+                            id = homeFirebase.id,
+                            name = homeFirebase.name,
+                            location = homeFirebase.location,
+                            description = homeFirebase.description,
+                            hostId = homeFirebase.hostId
                         )
+                        propertyRepo.addOrUpdateHome(home)
+
+                        // Save price
+                        homeFirebase.price?.let { price ->
+                            homestayRepo.insertPrice(HomestayPrice(homeId = home.id, price = price))
+                        }
+
+                        // Save promo
+                        homeFirebase.promotion?.let { promo ->
+                            homestayRepo.replacePromotionForHomestay(
+                                home.id,
+                                PromotionEntity(
+                                    homeId = home.id,
+                                    description = promo.description,
+                                    discountPercent = promo.discountPercent
+                                )
+                            )
+                        }
                     }
+
+                    Log.d("DEBUG_HOMES", "Firebase sync completed: ${firebaseHomes.size} homes saved to Room")
+                } catch (e: Exception) {
+                    Log.e("DEBUG_HOMES", "Error syncing from Firebase: ${e.message}", e)
                 }
             }
         }

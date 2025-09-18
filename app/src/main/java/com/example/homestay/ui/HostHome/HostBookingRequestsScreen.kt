@@ -1,4 +1,3 @@
-
 package com.example.homestay.ui.HostHome
 
 import androidx.compose.foundation.layout.*
@@ -25,7 +24,6 @@ import kotlinx.coroutines.launch
 fun HostBookingRequestsScreen(
     navController: NavController,
     bookingVM: BookingViewModel,
-    hostId = hostId
 ) {
     // Extract hostId from nav arguments
     val hostId = navController.currentBackStackEntry

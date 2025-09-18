@@ -157,11 +157,12 @@ class FirebaseRepository {
 
     suspend fun getBookingsForHost(hostId: String): List<Booking> {
         val snap = bookingsCol
-            .whereEqualTo("hostId", hostId)
+            .whereEqualTo("hostId", hostId) // 🔑 filter by hostId
             .get()
             .await()
-        return snap.toObjects()
+        return snap.toObjects(Booking::class.java)
     }
+
 
     private suspend fun uploadImagesToStorage(photoUris: List<Uri>): List<String> {
         if (photoUris.isEmpty()) return emptyList()

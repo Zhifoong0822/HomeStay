@@ -39,6 +39,27 @@ class FirestoreBookingRepository(
         }
     }
 
+    override suspend fun updateBookingStatus(
+        bookingId: String,
+        newStatus: String
+    ): Result<Unit> {
+        return try {
+            bookings.document(bookingId)
+                .update(
+                    mapOf(
+                        "status" to newStatus,
+                        "updatedAt" to Date()
+                    )
+                )
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+
+
     override suspend fun cancelBooking(bookingId: String): Result<Unit> {
         return try {
             bookings.document(bookingId)

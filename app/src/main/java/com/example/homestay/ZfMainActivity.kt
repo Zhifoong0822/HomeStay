@@ -33,7 +33,6 @@ import com.example.homestay.data.repository.PropertyListingRepository
 import com.example.homestay.ui.EditProfile.EditProfileScreen
 import com.example.homestay.ui.ForgotPassword.ForgotPasswordScreen
 import com.example.homestay.ui.HostHome.BookingHistoryScreen
-import com.example.homestay.ui.HostHome.BookingRequestsScreen
 import com.example.homestay.ui.HostHome.HomeWithDetailsViewModel
 import com.example.homestay.ui.HostHome.HomeScreenWrapper
 import com.example.homestay.ui.Login.LoginScreen
@@ -51,6 +50,7 @@ import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.homestay.data.repository.FirestoreBookingRepository
+import com.example.homestay.ui.HostHome.HostBookingRequestsScreen
 import com.example.homestay.ui.booking.UpdateBookingScreen
 import java.util.Date
 
@@ -203,7 +203,18 @@ fun HomeStayApp(
             composable(HomeStayScreen.HostHome.name) {
                 HomeScreenWrapper(homeVM = homeVM, navController = navController)
             }
-            composable("bookingRequests") { BookingRequestsScreen(navController) }
+            composable(
+                route = "bookingRequests/{hostId}",
+                arguments = listOf(navArgument("hostId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val hostId = backStackEntry.arguments?.getString("hostId") ?: ""
+                HostBookingRequestsScreen(
+                    navController = navController,
+                    bookingVM = bookingVM
+                )
+            }
+
+
             composable("bookingHistory") { BookingHistoryScreen(navController) }
 
             // Add Home
@@ -355,42 +366,41 @@ fun HomeStayApp(
             }
         }
 
-LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
-    if (uiState.isAuthChecking) {
-        // Still checking Firebase/DataStore, stay on Logo
-        return@LaunchedEffect
-    }
+        LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
+            val profile = uiState.userProfile
+            if (uiState.isLoggedIn && profile != null) {
+                when (profile.role) {
+                    "Host" -> {
+                        Log.d("NAVIGATION", "Navigating as Host -> HostHome")
+                        navController.navigate(HomeStayScreen.HostHome.name) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                        homeVM.setHostId(profile.userId)
+                        propertyVM.setHostId(profile.userId)
+                    }
 
-    val profile = uiState.userProfile
-    if (uiState.isLoggedIn && profile != null) {
-        when (profile.role) {
-            "Host" -> {
-                Log.d("NAVIGATION", "Navigating as Host -> HostHome")
-                navController.navigate(HomeStayScreen.HostHome.name) {
-                    popUpTo(0) { inclusive = true }
+                    "Guest" -> {
+                        Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
+                        bookingVM.setCurrentUser(profile.userId)
+                        bookingVM.loadUserBookings(profile.userId)
+                        navController.navigate(HomeStayScreen.ClientBrowse.name) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+
+                    else -> {
+                        Log.d("NAVIGATION", "Unknown role -> Logo")
+                        navController.navigate(HomeStayScreen.Logo.name) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
                 }
-                homeVM.setHostId(profile.userId)
-                propertyVM.setHostId(profile.userId)
-            }
-            "Guest" -> {
-                Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
-                bookingVM.setCurrentUser(profile.userId)
-                bookingVM.loadUserBookings(profile.userId)
-                navController.navigate(HomeStayScreen.ClientBrowse.name) {
-                    popUpTo(0) { inclusive = true }
-                }
-            }
-            else -> {
-                Log.d("NAVIGATION", "Unknown role -> Logo")
+            } else {
+                Log.d("NAVIGATION", "Not logged in -> Logo")
                 navController.navigate(HomeStayScreen.Logo.name) {
                     popUpTo(0) { inclusive = true }
                 }
             }
+                }
+            }
         }
-    } else {
-        Log.d("NAVIGATION", "Not logged in -> Logo")
-        navController.navigate(HomeStayScreen.Logo.name) {
-            popUpTo(0) { inclusive = true }
-        }
-    }
-}
