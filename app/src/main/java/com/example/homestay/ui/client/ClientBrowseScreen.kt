@@ -360,7 +360,9 @@ fun BookingHistoryDialog(
                                     ) {
                                         TextButton(onClick = { onCancel(b.bookingId) }) { Text("Cancel") }
                                         TextButton(onClick = { onReschedule(b.bookingId) }) { Text("Reschedule") }
-                                        TextButton(onClick = { onPay(b.bookingId) }) { Text("Pay Now") }
+                                        if (b.paymentStatus == "PENDING") {
+                                            TextButton(onClick = { onPay(b.bookingId) }) { Text("Pay Now") }
+                                        }
                                     }
 
                                     // Row 2: Check In / Check Out (mutually exclusive)
@@ -410,7 +412,7 @@ private fun BookingDialog(
     onDismiss: () -> Unit,
     onConfirm: (checkIn: Date, checkOut: Date, guests: Int, nights: Int) -> Unit
 ) {
-    // Use *text* states to avoid the “sticky 1 / always 20” issue
+    // Use text states to avoid the “sticky 1 / always 20” issue
     var guestsText by rememberSaveable { mutableStateOf("1") }
     var nightsText by rememberSaveable { mutableStateOf("1") }
     var checkInDate by remember { mutableStateOf(Date()) }
