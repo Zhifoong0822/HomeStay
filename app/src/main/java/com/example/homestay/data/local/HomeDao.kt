@@ -18,6 +18,11 @@ interface HomeDao {
     @Query("SELECT * FROM home WHERE id = :id")
     suspend fun getHomeById(id: String): HomeEntity?
 
+
+    @Query("SELECT * FROM home WHERE hostId = :hostId")
+    suspend fun getHomesByHostId(hostId: String): List<HomeEntity>
+
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHome(home: HomeEntity)
 

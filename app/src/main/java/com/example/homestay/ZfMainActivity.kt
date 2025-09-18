@@ -9,7 +9,6 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -18,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -41,13 +41,18 @@ import com.example.homestay.ui.Logo.LogoScreen
 import com.example.homestay.ui.Profile.ProfileScreen
 import com.example.homestay.ui.SignUp.SignUpScreen
 import com.example.homestay.ui.addPromo.AddPromoScreen
+import com.example.homestay.ui.booking.BookingViewModel
 import com.example.homestay.ui.property.HostAddOrEditHomeScreen
 import com.example.homestay.ui.property.PropertyListingViewModel
+import com.example.homestay.ui.client.ClientBrowseScreen
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
+import com.google.firebase.firestore.FirebaseFirestore
+import com.example.homestay.data.repository.FirestoreBookingRepository
 
+// ✅ Added ClientBrowse
 enum class HomeStayScreen {
     Logo,
     Login,
@@ -55,8 +60,11 @@ enum class HomeStayScreen {
     SignUp,
     HostHome,
     Profile,
-    EditProfile
+    EditProfile,
+    ClientBrowse  // 👈 everything booking-related inside here
 }
+
+
 
 class MainActivity : ComponentActivity() {
     private lateinit var dataStoreManager: DataStoreManager
@@ -64,38 +72,37 @@ class MainActivity : ComponentActivity() {
         AuthViewModelFactory(applicationContext, dataStoreManager)
     }
 
+    val uid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FirebaseApp.initializeApp(this)
         dataStoreManager = DataStoreManager(applicationContext)
 
-        // Check which Firebase project is connected
+        // Firebase project check
         val firebaseApp = FirebaseApp.getInstance()
         val projectId = firebaseApp.options.projectId
-
         Log.d("FIREBASE_CHECK", "🔥 Connected to Firebase Project: $projectId")
-        Log.d("FIREBASE_CHECK", "🔥 Expected project: homestayassignment")
-        Log.d("FIREBASE_CHECK", "✅ Correct project? ${projectId == "homestayassignment"}")
 
         try {
-            FirebaseApp.initializeApp(this)
             FirebaseAuth.getInstance().addAuthStateListener { auth ->
                 val user = auth.currentUser
                 if (user != null) {
                     Log.d("FIREBASE_AUTH", "👤 User logged in: ${user.uid}")
                     Log.d("FIREBASE_AUTH", "📧 Email: ${user.email}")
-                    Log.d("FIREBASE_AUTH", "🏠 Project: ${FirebaseApp.getInstance().options.projectId}")
                 } else {
                     Log.d("FIREBASE_AUTH", "❌ No user logged in")
                 }
             }
-            Log.d("MainActivity", "Firebase initialized successfully")
         } catch (e: Exception) {
             Log.e("MainActivity", "Firebase initialization failed", e)
         }
+
         enableEdgeToEdge()
 
-        val userDb = UserDatabase.getDatabase(applicationContext) // your UserDatabase singleton
+        val userDb = UserDatabase.getDatabase(applicationContext)
         lifecycleScope.launch {
             val users = userDb.userDao().getAllUsers()
             Log.d("USER_DB_CHECK", "User DB opened, users count = ${users.size}")
@@ -103,7 +110,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
-                Text("Test App Running")
                 val windowSizeClass = calculateWindowSizeClass(this)
 
                 //Repositories
@@ -123,7 +129,7 @@ class MainActivity : ComponentActivity() {
 
                 //ViewModels
                 val homeVM: HomeWithDetailsViewModel = viewModel(
-                    factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
                             if (modelClass.isAssignableFrom(HomeWithDetailsViewModel::class.java)) {
                                 @Suppress("UNCHECKED_CAST")
@@ -135,11 +141,25 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val propertyVM: PropertyListingViewModel = viewModel(
-                    factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
                             if (modelClass.isAssignableFrom(PropertyListingViewModel::class.java)) {
                                 @Suppress("UNCHECKED_CAST")
                                 return PropertyListingViewModel(propertyRepo, SavedStateHandle()) as T
+                            }
+                            throw IllegalArgumentException("Unknown ViewModel class")
+                        }
+                    }
+                )
+
+                val bookingRepo = FirestoreBookingRepository(firestore = FirebaseFirestore.getInstance())
+
+                val bookingVM: BookingViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            if (modelClass.isAssignableFrom(BookingViewModel::class.java)) {
+                                @Suppress("UNCHECKED_CAST")
+                                return BookingViewModel(bookingRepo) as T
                             }
                             throw IllegalArgumentException("Unknown ViewModel class")
                         }
@@ -152,7 +172,8 @@ class MainActivity : ComponentActivity() {
                     dataStoreManager = dataStoreManager,
                     homeVM = homeVM,
                     propertyVM = propertyVM,
-                    homestayRepo = homestayRepo
+                    homestayRepo = homestayRepo,
+                    bookingVM = bookingVM
                 )
             }
         }
@@ -166,36 +187,37 @@ fun HomeStayApp(
     dataStoreManager: DataStoreManager,
     homeVM: HomeWithDetailsViewModel,
     propertyVM: PropertyListingViewModel,
-    homestayRepo: HomestayRepository
+    homestayRepo: HomestayRepository,
+    bookingVM: BookingViewModel
 ) {
     val navController = rememberNavController()
-
     val uiState by authViewModel.uiState.collectAsState()
     val isLoggedIn by dataStoreManager.isLoggedIn.collectAsState(initial = false)
 
     Surface(modifier = Modifier.fillMaxSize()) {
         NavHost(navController = navController, startDestination = HomeStayScreen.Logo.name) {
 
-            //Home Screen
+            // Host Home
             composable(HomeStayScreen.HostHome.name) {
                 HomeScreenWrapper(homeVM = homeVM, navController = navController)
             }
             composable("bookingRequests") { BookingRequestsScreen(navController) }
             composable("bookingHistory") { BookingHistoryScreen(navController) }
 
-            //Add Home
+            // Add Home
             composable("addHome") {
                 HostAddOrEditHomeScreen(
                     propertyVM = propertyVM,
                     homeVM = homeVM,
                     isEdit = false,
                     homeId = null,
+                    authViewModel = authViewModel,
                     onBack = { navController.popBackStack() },
                     navController = navController
                 )
             }
 
-            //Edit Home
+            // Edit Home
             composable(
                 route = "editHome/{homeId}",
                 arguments = listOf(navArgument("homeId") { type = NavType.StringType })
@@ -206,12 +228,13 @@ fun HomeStayApp(
                     homeVM = homeVM,
                     isEdit = true,
                     homeId = homeId,
+                    authViewModel = authViewModel,
                     onBack = { navController.popBackStack() },
                     navController = navController
                 )
             }
 
-            //Add Promo Screen
+            // Add Promo
             composable(
                 route = "addPromo/{homeId}/{homeName}",
                 arguments = listOf(
@@ -231,170 +254,121 @@ fun HomeStayApp(
                 )
             }
 
-            //Logo Screen
-            composable(route = HomeStayScreen.Logo.name) {
-                when (windowSizeClass.widthSizeClass) {
-                    WindowWidthSizeClass.Compact -> {
-                        //Phone layout
-                        LogoScreen(
-                            isTablet = false,
-                            onLoginButtonClicked = {
-                                navController.navigate(HomeStayScreen.Login.name)
-                            },
-                            onSignUpButtonClicked = {
-                                navController.navigate(HomeStayScreen.SignUp.name)
-                            })
-                    }
-                    WindowWidthSizeClass.Medium,
-                    WindowWidthSizeClass.Expanded -> {
-                        //Tablet layout
-                        LogoScreen(
-                            isTablet = true,
-                            onLoginButtonClicked = {
-                                navController.navigate(HomeStayScreen.Login.name)
-                            },
-                            onSignUpButtonClicked = {
-                                navController.navigate(HomeStayScreen.SignUp.name)
-                            })
-                    }
-                }
+            // Logo
+            composable(HomeStayScreen.Logo.name) {
+                val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+                LogoScreen(
+                    isTablet = isTablet,
+                    onLoginButtonClicked = { navController.navigate(HomeStayScreen.Login.name) },
+                    onSignUpButtonClicked = { navController.navigate(HomeStayScreen.SignUp.name) }
+                )
             }
 
-            //Login Screen
-            composable(route = HomeStayScreen.Login.name) {
-                when (windowSizeClass.widthSizeClass) {
-                    WindowWidthSizeClass.Compact -> {
-                        //Phone layout
-                        LoginScreen(
-                            isTablet = false,
-                            viewModel = authViewModel,
-                            onSuccess = { navController.navigate(HomeStayScreen.HostHome.name) },
-                            onBackButtonClicked = { navController.navigate(HomeStayScreen.Logo.name) },
-                            onForgotPasswordClicked = { navController.navigate(HomeStayScreen.ForgotPassword.name) })
-                    }
-                    WindowWidthSizeClass.Medium,
-                    WindowWidthSizeClass.Expanded -> {
-                        //Tablet layout
-                        LoginScreen(
-                            isTablet = true,
-                            viewModel = authViewModel,
-                            onSuccess = { navController.navigate(HomeStayScreen.HostHome.name) },
-                            onBackButtonClicked = { navController.navigate(HomeStayScreen.Logo.name) },
-                            onForgotPasswordClicked = { navController.navigate(HomeStayScreen.ForgotPassword.name) })
-                    }
-                }
+            // Login
+            composable(HomeStayScreen.Login.name) {
+                val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+                LoginScreen(
+                    isTablet = isTablet,
+                    viewModel = authViewModel,
+                    onSuccess = { navController.navigate(HomeStayScreen.HostHome.name) },
+                    onBackButtonClicked = { navController.navigate(HomeStayScreen.Logo.name) },
+                    onForgotPasswordClicked = { navController.navigate(HomeStayScreen.ForgotPassword.name) }
+                )
             }
 
-            //Forgot Password
-            composable(route = HomeStayScreen.ForgotPassword.name) {
-                when (windowSizeClass.widthSizeClass) {
-                    WindowWidthSizeClass.Compact -> {
-                        //Phone layout
-                        ForgotPasswordScreen(
-                            isTablet = false,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.popBackStack() })
-                    }
-                    WindowWidthSizeClass.Medium,
-                    WindowWidthSizeClass.Expanded -> {
-                        //Tablet layout
-                        ForgotPasswordScreen(
-                            isTablet = true,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.popBackStack() })
-                    }
-                }
+            // Forgot Password
+            composable(HomeStayScreen.ForgotPassword.name) {
+                val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+                ForgotPasswordScreen(
+                    isTablet = isTablet,
+                    viewModel = authViewModel,
+                    onBackButtonClicked = { navController.popBackStack() }
+                )
             }
 
-            //Sign Up
-            composable(route = HomeStayScreen.SignUp.name) {
-                when (windowSizeClass.widthSizeClass) {
-                    WindowWidthSizeClass.Compact -> {
-                        //Phone layout
-                        SignUpScreen(
-                            isTablet = false,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.popBackStack() },
-                            onSuccess = { navController.navigate(HomeStayScreen.Logo.name) })
-                    }
-                    WindowWidthSizeClass.Medium,
-                    WindowWidthSizeClass.Expanded -> {
-                        //Tablet layout
-                        SignUpScreen(
-                            isTablet = true,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.popBackStack() },
-                            onSuccess = { navController.navigate(HomeStayScreen.Logo.name) })
-                    }
-                }
+            // Sign Up
+            composable(HomeStayScreen.SignUp.name) {
+                val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+                SignUpScreen(
+                    isTablet = isTablet,
+                    viewModel = authViewModel,
+                    onBackButtonClicked = { navController.popBackStack() },
+                    onSuccess = { navController.navigate(HomeStayScreen.Logo.name) }
+                )
             }
 
-            //Profile
-            composable(route = HomeStayScreen.Profile.name) {
-                when (windowSizeClass.widthSizeClass) {
-                    WindowWidthSizeClass.Compact -> {
-                        //Phone layout
-                        ProfileScreen(
-                            isTablet = false,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.navigate(HomeStayScreen.HostHome.name) },
-                            onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
-                            onLogoutClicked = { authViewModel.logout()},
-                            onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name)})
-                    }
-                    WindowWidthSizeClass.Medium,
-                    WindowWidthSizeClass.Expanded -> {
-                        //Tablet layout
-                        ProfileScreen(
-                            isTablet = true,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.navigate(HomeStayScreen.HostHome.name) },
-                            onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
-                            onLogoutClicked = { authViewModel.logout()},
-                            onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name)})
-                    }
-                }
+            // ✅ Client Browse
+            composable(HomeStayScreen.ClientBrowse.name) {
+                ClientBrowseScreen(
+                    vm = propertyVM,
+                    bookingVm = bookingVM,
+                    onBottomHome = { navController.navigate(HomeStayScreen.ClientBrowse.name) },
+                    onBottomExplore = { /* current */ },
+                    onBottomProfile = { navController.navigate(HomeStayScreen.Profile.name) }
+                )
             }
 
-            //Edit Profile
-            composable(route = HomeStayScreen.EditProfile.name) {
-                when (windowSizeClass.widthSizeClass) {
-                    WindowWidthSizeClass.Compact -> {
-                        //Phone layout
-                        EditProfileScreen(
-                            isTablet = false,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.popBackStack() },
-                            onSaveSuccess = { navController.navigate(HomeStayScreen.Profile.name) })
-                    }
-                    WindowWidthSizeClass.Medium,
-                    WindowWidthSizeClass.Expanded -> {
-                        //Tablet layout
-                        EditProfileScreen(
-                            isTablet = true,
-                            viewModel = authViewModel,
-                            onBackButtonClicked = { navController.popBackStack() },
-                            onSaveSuccess = { navController.navigate(HomeStayScreen.Profile.name) })
-                    }
-                }
+            // Profile
+            composable(HomeStayScreen.Profile.name) {
+                val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+                ProfileScreen(
+                    isTablet = isTablet,
+                    viewModel = authViewModel,
+                    onBackButtonClicked = { navController.popBackStack() },
+                    onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
+                    onLogoutClicked = { authViewModel.logout() },
+                    onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name) }
+                )
+            }
+
+            // Edit Profile
+            composable(HomeStayScreen.EditProfile.name) {
+                val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
+                EditProfileScreen(
+                    isTablet = isTablet,
+                    viewModel = authViewModel,
+                    onBackButtonClicked = { navController.popBackStack() },
+                    onSaveSuccess = { navController.navigate(HomeStayScreen.Profile.name) }
+                )
             }
         }
 
-        LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
-            if (uiState.isAuthChecking) {
-                //still checking Firebase, stay on Logo screen
-                return@LaunchedEffect
-            }
+LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
+    if (uiState.isAuthChecking) {
+        // Still checking Firebase/DataStore, stay on Logo
+        return@LaunchedEffect
+    }
 
-            if (uiState.isLoggedIn && uiState.userProfile != null) {
+    val profile = uiState.userProfile
+    if (uiState.isLoggedIn && profile != null) {
+        when (profile.role) {
+            "Host" -> {
+                Log.d("NAVIGATION", "Navigating as Host -> HostHome")
                 navController.navigate(HomeStayScreen.HostHome.name) {
                     popUpTo(0) { inclusive = true }
                 }
-            } else {
+                homeVM.setHostId(profile.userId)
+                propertyVM.setHostId(profile.userId)
+            }
+            "Guest" -> {
+                Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
+                bookingVM.setCurrentUser(profile.userId)
+                bookingVM.loadUserBookings(profile.userId)
+                navController.navigate(HomeStayScreen.ClientBrowse.name) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+            else -> {
+                Log.d("NAVIGATION", "Unknown role -> Logo")
                 navController.navigate(HomeStayScreen.Logo.name) {
                     popUpTo(0) { inclusive = true }
                 }
             }
+        }
+    } else {
+        Log.d("NAVIGATION", "Not logged in -> Logo")
+        navController.navigate(HomeStayScreen.Logo.name) {
+            popUpTo(0) { inclusive = true }
         }
     }
 }
