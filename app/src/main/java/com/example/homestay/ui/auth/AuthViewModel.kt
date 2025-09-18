@@ -78,11 +78,30 @@ class AuthViewModel(
                 val currentUser = authRepository.getCurrentUser()
 
                 if (loggedIn && currentUser != null && currentUser.isEmailVerified) {
+                    dataStoreManager.setLoginStatus(true)
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = true,
                         isLoading = true
                     )
                     loadUserProfile(currentUser.uid)
+
+                } else if (loggedIn && currentUser == null) {
+                    //Fallback: try cached local user
+                    val localUser = authRepository.getUserFromLocal()
+                    if (localUser != null) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = true,
+                            userProfile = localUser,
+                            isLoading = false
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = false,
+                            userProfile = null,
+                            isLoading = false
+                        )
+                    }
+
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = false,
@@ -121,8 +140,6 @@ class AuthViewModel(
         _loginState.value = _loginState.value.copy(password = newPassword)
     }
 
-
-
     fun login() {
         val email = _loginState.value.email.trim()
         val password = _loginState.value.password.trim()
@@ -139,69 +156,74 @@ class AuthViewModel(
         if (!isValid) return
 
         viewModelScope.launch {
-            _loginState.value = _loginState.value.copy(
-                isLoading = true,
-                errorMessage = null,
-                successMessage = null
-            )
+            _loginState.value = _loginState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
 
             try {
                 when (val result = authRepository.login(email, password)) {
                     is AuthResult.Success -> {
+                        dataStoreManager.setLoginStatus(true)
+
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
-                            successMessage = "Login successful!"
+                            successMessage = if (result.data != null) {
+                                "Login successful (Firebase)!"
+                            } else {
+                                "Login successful (Offline mode)"
+                            }
                         )
-
-                        // mark logged in
-                        viewModelScope.launch { dataStoreManager.setLoginStatus(true) }
-
+                        //set isLoggedIn = true
+                        viewModelScope.launch {
+                            dataStoreManager.setLoginStatus(true)
+                        }
+                        //Load profile either from Firebase or local
                         val uid = result.data?.uid
                         if (uid != null) {
-                            // 🔹 Load profile from Firestore
-                            val firestore = FirebaseFirestore.getInstance()
-                            val doc = firestore.collection("users")
-                                .document(uid)
-                                .get()
-                                .await()
+                            //Fetch Firestore profile directly (so we can use it immediately)
+                            val profileResult = authRepository.getUserProfile(uid)
+                            if (profileResult is AuthResult.Success && profileResult.data != null) {
+                                val profile = profileResult.data
+                                _uiState.value = _uiState.value.copy(
+                                    userProfile = profile,
+                                    isLoggedIn = true
+                                )
 
-                            val userRole = doc.getString("role") ?: "guest"
-                            val userName = doc.getString("username") ?: (result.data?.email ?: "")
-
-                            // ✅ Load into UI state
-                            loadUserProfile(uid)
-
-                            // 🔹 Insert into Room with username from Firestore
-                            result.data?.let { firebaseUser ->
+                                // Save to Room with profile values
                                 val db = UserDatabase.getDatabase(context)
                                 val userDao = db.userDao()
                                 viewModelScope.launch(Dispatchers.IO) {
+                                    val safeRole = _signUpState.value.role
+                                    if (safeRole.isBlank()) {
+                                        Log.e("AuthViewModel", "Skipping Room insert - role is empty")
+                                        return@launch
+                                    }
+
                                     val userEntity = UserEntity(
-                                        userId = firebaseUser.uid,
-                                        email = firebaseUser.email ?: "",
+                                        userId = uid,
+                                        email = profile.email,
                                         password = "",
-                                        username = userName, // ✅ now real username
-                                        gender = doc.getString("gender") ?: "",
-                                        birthdate = doc.getString("birthdate") ?: "",
-                                        role = userRole,
+                                        username = profile.username,
+                                        gender = profile.gender,
+                                        birthdate = profile.birthdate,
+                                        role = safeRole,
                                         createdAt = System.currentTimeMillis(),
                                         updatedAt = System.currentTimeMillis()
                                     )
                                     userDao.insertUser(userEntity)
                                 }
+                            } else {
+                                // fallback if profile failed
+                                loadUserProfile(uid)
                             }
                         } else {
-                            loadLocalUserProfile(email) // offline fallback
+                            loadLocalUserProfile(email) // Local profile
                         }
                     }
-
                     is AuthResult.Error -> {
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
                             errorMessage = result.exception.message ?: "Login failed"
                         )
                     }
-
                     else -> {
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
@@ -217,8 +239,6 @@ class AuthViewModel(
             }
         }
     }
-
-
 
     // SIGNUP
     fun onSignUpEmailChange(email: String) {
@@ -648,7 +668,14 @@ class AuthViewModel(
                         )
                         return@launch
                     }
-
+                    val available = authRepository.isUsernameAvailable(updatedProfile.username)
+                    if (!available) {
+                        _editProfileState.value = _editProfileState.value.copy(
+                            isLoading = false,
+                            errorMessage = "Username already taken"
+                        )
+                        return@launch
+                    }
                 } else {
                     Log.d("EditProfile", "Username NOT changing - skipping check")
                 }
@@ -822,6 +849,10 @@ class AuthViewModel(
             successMessage = null,
             errorMessage = null
         )
+    }
+
+    fun clearEditProfileSuccessMessage() {
+        _editProfileState.update { it.copy(successMessage = null) }
     }
 
     fun clearResetPasswordMessages() {

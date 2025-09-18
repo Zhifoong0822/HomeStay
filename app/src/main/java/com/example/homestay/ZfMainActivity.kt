@@ -333,42 +333,42 @@ fun HomeStayApp(
             }
         }
 
+LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
+    if (uiState.isAuthChecking) {
+        // Still checking Firebase/DataStore, stay on Logo
+        return@LaunchedEffect
+    }
 
-
-
-        // ✅ Navigation based on login state
-        LaunchedEffect(isLoggedIn, uiState.userProfile) {
-            val profile = uiState.userProfile
-            if (isLoggedIn && profile != null) {
-
-                when (profile.role) {
-                    "Host" -> {
-                        Log.d("NAVIGATION", "Navigating as Host -> HostHome")
-                        navController.navigate(HomeStayScreen.HostHome.name) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                        homeVM.setHostId(profile.userId)
-                        propertyVM.setHostId(profile.userId)
-                    }
-                    "Guest" -> {
-                        Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
-                        bookingVM.setCurrentUser(profile.userId)
-                        bookingVM.loadUserBookings(profile.userId)
-                        navController.navigate(HomeStayScreen.ClientBrowse.name) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
-                    else -> {
-                        navController.navigate(HomeStayScreen.Logo.name) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
+    val profile = uiState.userProfile
+    if (uiState.isLoggedIn && profile != null) {
+        when (profile.role) {
+            "Host" -> {
+                Log.d("NAVIGATION", "Navigating as Host -> HostHome")
+                navController.navigate(HomeStayScreen.HostHome.name) {
+                    popUpTo(0) { inclusive = true }
                 }
-            } else {
+                homeVM.setHostId(profile.userId)
+                propertyVM.setHostId(profile.userId)
+            }
+            "Guest" -> {
+                Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
+                bookingVM.setCurrentUser(profile.userId)
+                bookingVM.loadUserBookings(profile.userId)
+                navController.navigate(HomeStayScreen.ClientBrowse.name) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+            else -> {
+                Log.d("NAVIGATION", "Unknown role -> Logo")
                 navController.navigate(HomeStayScreen.Logo.name) {
                     popUpTo(0) { inclusive = true }
                 }
             }
+        }
+    } else {
+        Log.d("NAVIGATION", "Not logged in -> Logo")
+        navController.navigate(HomeStayScreen.Logo.name) {
+            popUpTo(0) { inclusive = true }
         }
     }
 }
