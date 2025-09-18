@@ -1,23 +1,37 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.homestay.ui.booking
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.KeyboardType
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.Date
 import kotlin.math.max
 import com.example.homestay.data.model.Booking
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookingScreen(
     bookingVm: BookingViewModel,
@@ -44,15 +58,10 @@ fun BookingScreen(
 
     // ---- Derived Pricing ----
     val subtotal = remember(guests, nights, pricePerNight) {
-        // example: price per night * nights (guests could be used to add-on if you want)
         pricePerNight * nights
     }
 
     val promoDiscount = remember(subtotal, promoCode) {
-        // Example rules:
-        // - "SAVE10" = 10% off
-        // - "FLAT20" = RM 20 off
-        // - Otherwise = 0
         when (promoCode.trim().uppercase()) {
             "SAVE10" -> 0.10 * subtotal
             "FLAT20" -> 20.0
@@ -60,10 +69,9 @@ fun BookingScreen(
         }.let { d -> max(0.0, minOf(d, subtotal)) }
     }
 
-    val fees = remember(subtotal) { 6.0 }               // flat service fee
+    val fees = remember(subtotal) { 6.0 } // flat service fee
     val tax = remember(subtotal, promoDiscount, fees) {
-        // SST example 6% after discount + fees
-        0.06 * (subtotal - promoDiscount + fees)
+        0.06 * (subtotal - promoDiscount + fees) // SST 6%
     }
     val grandTotal = remember(subtotal, promoDiscount, fees, tax) {
         (subtotal - promoDiscount + fees + tax).coerceAtLeast(0.0)
@@ -189,15 +197,14 @@ fun BookingScreen(
                     // Build a booking draft and open confirm dialog
                     val b = Booking(
                         bookingId = UUID.randomUUID().toString(),
-                        userId = "sampleUser",   // plug your actual user id
-                        homeId = "sampleHome",   // plug your actual selected home id
+                        userId = "sampleUser",   // replace with actual user id
+                        homeId = "sampleHome",   // replace with selected home id
                         hostId = "sampleHost",
                         numberOfGuests = guests,
                         nights = nights,
                         pricePerNight = pricePerNight,
-                        checkInDate = Date(),    // replace with your selected date
-                        checkOutDate = Date(),   // replace with your selected date
-                        paymentMethod = paymentMethod.name,
+                        checkInDate = Date(),    // replace with selected date
+                        checkOutDate = Date(),   // replace with selected date
                         paymentStatus = "PENDING"
                     )
                     pendingBooking = b
@@ -264,8 +271,6 @@ fun BookingScreen(
                                 val txn = UUID.randomUUID().toString()
                                 bookingVm.payBooking(b.bookingId, txn)
                                 showPaySuccess = true
-                            } else {
-                                // VM will expose error; no-op here
                             }
                         }
                     }

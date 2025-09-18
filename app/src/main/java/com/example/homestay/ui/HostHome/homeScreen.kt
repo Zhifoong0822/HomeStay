@@ -287,7 +287,7 @@ fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavContro
     LaunchedEffect(hostId) {
         if (hostId != null) {
             homeVM.setHostId(hostId)
-            homeVM.syncHomesFromFirebase(hostId)
+            homeVM.syncHomesFromFirebase()
         }
     }
 

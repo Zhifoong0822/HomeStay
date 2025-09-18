@@ -15,8 +15,9 @@ import com.example.homestay.data.model.Booking
 fun BookingListScreen(
     bookingVm: BookingViewModel,
     userId: String,
+    homeName: String?,
     onBookingClick: (Booking) -> Unit
-) { 
+) {
     val bookings by bookingVm.bookings.collectAsState()
     val loading by bookingVm.loading.collectAsState()
 
@@ -42,6 +43,11 @@ fun BookingListScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text("Property: ${booking.homeId}", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = homeName?.let { "Home: $it" } ?: "Home: —",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                            )
                             Text("Check-in: ${booking.checkInDate}")
                             Text("Check-out: ${booking.checkOutDate}")
                             Text("Total: RM${booking.totalPrice}")

@@ -1,16 +1,14 @@
+// ClientBrowseScreen.kt
 package com.example.homestay.ui.client
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,27 +31,19 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.Date
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientBrowseScreen(
     vm: PropertyListingViewModel,
     bookingVm: BookingViewModel,
-    onBottomHome: () -> Unit,
     navController: NavController,
-    onBottomExplore: () -> Unit, // kept for compatibility (unused)
+    onBottomHome: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onBottomExplore: () -> Unit, // kept for compatibility
     onBottomProfile: () -> Unit
 ) {
-    val homes by vm.homes.collectAsState(initial = emptyList())
+    val homes by vm.homesCloud.collectAsState(initial = emptyList())
     val bookings by bookingVm.bookings.collectAsState(initial = emptyList())
-
-    // who is logged in
-    val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
-
-// observe check-in map (homeId|userId -> CheckStatus)
-    val checkMap by vm.checkMap.collectAsState()
 
     var selectedHome by remember { mutableStateOf<Home?>(null) }
     var showBookingHistory by remember { mutableStateOf(false) }
@@ -61,23 +51,25 @@ fun ClientBrowseScreen(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
 
-    // search (top)
+    // search
     var query by rememberSaveable { mutableStateOf("") }
-    val filtered = remember(homes, query) {
-        if (query.isBlank()) homes else homes.filter { it.name.contains(query, ignoreCase = true) }
+    val filteredHomes = remember(homes, query) {
+        if (query.isBlank()) homes
+        else homes.filter { it.name.contains(query, ignoreCase = true) }
     }
 
-    // helper to read whether this booking is currently checked in
-    fun isBookingCheckedIn(homeId: String): Boolean =
-        vm.isCheckedIn(homeId, currentUid)
+    // ensure current user set in VM
+    LaunchedEffect(Unit) {
+        FirebaseAuth.getInstance().currentUser?.uid?.let { bookingVm.setCurrentUser(it) }
+    }
 
-    val buttonsHiddenForBooking = remember { mutableStateMapOf<String, Boolean>() }
-    fun isButtonsHidden(b: Booking) = buttonsHiddenForBooking[b.bookingId] == true
-    fun hideButtonsFor(b: Booking) { buttonsHiddenForBooking[b.bookingId] = true }
-
+    // collect one-shot messages
+    LaunchedEffect(Unit) {
+        bookingVm.message.collect { msg -> snackbar.showSnackbar(msg) }
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("SKY BNB") }) },
+        topBar = { TopAppBar(title = { Text("Available Homes") }) },
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = Color(0xFFFEF9F3),
         bottomBar = {
@@ -87,7 +79,7 @@ fun ClientBrowseScreen(
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                     if (uid != null) {
                         bookingVm.setCurrentUser(uid)
-                        bookingVm.loadUserBookings()
+                        bookingVm.loadUserBookings(uid)
                         showBookingHistory = true
                     } else {
                         scope.launch { snackbar.showSnackbar("Please sign in to view bookings.") }
@@ -102,7 +94,7 @@ fun ClientBrowseScreen(
                 .fillMaxSize()
                 .padding(pad)
         ) {
-            // top search bar
+            // search bar
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -114,7 +106,7 @@ fun ClientBrowseScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
             )
 
-            if (filtered.isEmpty()) {
+            if (filteredHomes.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("No properties found.")
                 }
@@ -125,7 +117,7 @@ fun ClientBrowseScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filtered, key = { it.id }) { home ->
+                    items(filteredHomes, key = { it.id }) { home ->
                         ClientHomeCard(
                             home = home,
                             onBookClick = { selectedHome = home }
@@ -140,7 +132,7 @@ fun ClientBrowseScreen(
             BookingDialog(
                 home = home,
                 onDismiss = { selectedHome = null },
-                onConfirm = { checkIn, checkOut, guests, nights ->
+                onConfirm = { checkInDate, checkOutDate, guests, nights ->
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                     if (uid == null) {
                         scope.launch { snackbar.showSnackbar("Please sign in to make a booking.") }
@@ -152,11 +144,11 @@ fun ClientBrowseScreen(
                         userId = uid,
                         homeId = home.id,
                         hostId = home.hostId,
-                        checkInDate = checkIn,
-                        checkOutDate = checkOut,
+                        checkInDate = checkInDate,
+                        checkOutDate = checkOutDate,
                         numberOfGuests = guests,
                         nights = nights,
-                        pricePerNight = home.pricePerNight
+                        pricePerNight = home.pricePerNight ?: 0.0
                     )
 
                     scope.launch {
@@ -173,41 +165,13 @@ fun ClientBrowseScreen(
             )
         }
 
+        val homeById = remember(homes) { homes.associateBy { it.id } }
 
-        // booking history dialog
+        // booking history
         if (showBookingHistory) {
             BookingHistoryDialog(
                 bookings = bookings,
-
-                // NEW: show/hide logic for the row of check buttons
-                isCheckedIn = { booking -> vm.isCheckedIn(booking.homeId, currentUid) },
-                canCheckInNow = { booking ->
-                    val now = Date()
-                    now >= booking.checkInDate && now < booking.checkOutDate
-                },
-                isButtonsHidden = { booking -> isButtonsHidden(booking) },
-
-                // NEW: button actions
-                onCheckIn = { booking ->
-                    val now = Date()
-                    if (now >= booking.checkInDate && now < booking.checkOutDate) {
-                        scope.launch {
-                            vm.toggleCheck(booking.homeId, currentUid)
-                            snackbar.showSnackbar("Checked in successfully")
-                        }
-                    } else {
-                        scope.launch { snackbar.showSnackbar("You can only check in on/after the check-in date.") }
-                    }
-                },
-                onCheckOut = { booking ->
-                    scope.launch {
-                        vm.toggleCheck(booking.homeId, currentUid)
-                        snackbar.showSnackbar("Checked out successfully")
-                        hideButtonsFor(booking) // hide further check buttons for this booking
-                    }
-                },
-
-                // existing props
+                homeById = homeById,
                 onDismiss = { showBookingHistory = false },
                 onCancel = { id -> scope.launch { bookingVm.cancelBooking(id) } },
                 onReschedule = { id ->
@@ -217,11 +181,14 @@ fun ClientBrowseScreen(
                         bookingVm.rescheduleBooking(id, newIn, newOut)
                     }
                 },
-                onPay = { id -> scope.launch { bookingVm.markBookingAsPaid(id) } }
+                onCheckIn = { id -> scope.launch { bookingVm.checkIn(id) } },
+                onCheckOut = { id -> scope.launch { bookingVm.checkOut(id) } }
             )
         }
     }
 }
+
+/* ---------- Bottom bar ---------- */
 
 @Composable
 private fun BottomNavBar(
@@ -251,16 +218,20 @@ private fun BottomNavBar(
     }
 }
 
+/* ---------- Home list card ---------- */
+
 @Composable
 private fun ClientHomeCard(
     home: Home,
     onBookClick: () -> Unit
 ) {
+    val price = home.pricePerNight ?: 0.0
+
     Card(onClick = onBookClick) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
-                    model = home.imageUrls.firstOrNull() ?: home.photoUris.firstOrNull(),
+                    model = home.photoUris.firstOrNull(),
                     contentDescription = home.name,
                     modifier = Modifier.size(72.dp)
                 )
@@ -271,7 +242,7 @@ private fun ClientHomeCard(
                     Text(home.location, style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "$${home.pricePerNight}/night",
+                        "RM ${"%.2f".format(price)} / night",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -303,22 +274,17 @@ private fun ClientHomeCard(
     }
 }
 
+/* ---------- Booking History Dialog ---------- */
+
 @Composable
 fun BookingHistoryDialog(
     bookings: List<Booking>,
-
-    // NEW: check-in/out status + visibility
-    isCheckedIn: (Booking) -> Boolean,
-    canCheckInNow: (Booking) -> Boolean,
-    isButtonsHidden: (Booking) -> Boolean,
-    onCheckIn: (Booking) -> Unit,
-    onCheckOut: (Booking) -> Unit,
-
-    // existing callbacks
+    homeById: Map<String, Home>,
     onDismiss: () -> Unit,
     onCancel: (String) -> Unit,
     onReschedule: (String) -> Unit,
-    onPay: (String) -> Unit
+    onCheckIn: (String) -> Unit,
+    onCheckOut: (String) -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -334,11 +300,15 @@ fun BookingHistoryDialog(
                 if (bookings.isEmpty()) {
                     Text("No bookings yet.")
                 } else {
+                    val visibleBookings = remember(bookings) {
+                        bookings.filter { it.status?.uppercase(Locale.getDefault()) != "CANCELLED" }
+                    }
+
                     LazyColumn {
-                        items(bookings, key = { it.bookingId }) { b ->
-                            val checkedIn = isCheckedIn(b)
-                            val allowCheckIn = canCheckInNow(b)
-                            val hideButtons = isButtonsHidden(b)
+                        items(visibleBookings, key = { it.bookingId }) { booking ->
+                            val home = homeById[booking.homeId]
+                            val pricePerNight = home?.pricePerNight ?: booking.pricePerNight ?: 0.0
+                            val total = pricePerNight * booking.nights
 
                             Card(
                                 modifier = Modifier
@@ -346,47 +316,81 @@ fun BookingHistoryDialog(
                                     .padding(vertical = 6.dp)
                             ) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text("Booking ID: ${b.bookingId}", fontWeight = FontWeight.Bold)
-                                    Text("Check-in: ${b.checkInDate}")
-                                    Text("Check-out: ${b.checkOutDate}")
-                                    Text("Guests: ${b.numberOfGuests}")
-                                    Text("Nights: ${b.nights}")
-                                    Text("Total: $${b.pricePerNight * b.nights}")
+                                    Text("Booking ID: ${booking.bookingId}", fontWeight = FontWeight.Bold)
+                                    if (home != null) Text("Home: ${home.name}")
+                                    Text("Check-in: ${booking.checkInDate}")
+                                    Text("Check-out: ${booking.checkOutDate}")
+                                    Text("Guests: ${booking.numberOfGuests}")
+                                    Text("Nights: ${booking.nights}")
+                                    Text("Price: RM ${"%.2f".format(pricePerNight)} / night")
+                                    Text("Total: RM ${"%.2f".format(total)}")
 
                                     Spacer(Modifier.height(8.dp))
 
-                                    // Row 1: usual actions
-                                    Row(
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)   // space between buttons
                                     ) {
-                                        TextButton(onClick = { onCancel(b.bookingId) }) { Text("Cancel") }
-                                        TextButton(onClick = { onReschedule(b.bookingId) }) { Text("Reschedule") }
-                                        if (b.paymentStatus == "PENDING") {
-                                            TextButton(onClick = { onPay(b.bookingId) }) { Text("Pay Now") }
+                                        //cancel
+                                        FilledTonalButton(
+                                            onClick = { onCancel(booking.bookingId) },
+                                            modifier =  Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Cancel, contentDescription = "Cancel")
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Cancel")
+                                        }
+
+                                        //reschedule
+                                        FilledTonalButton(
+                                            onClick = { onReschedule(booking.bookingId) },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.EventRepeat, contentDescription = "Reschedule")
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Reschedule")
                                         }
                                     }
 
-                                    // Row 2: Check In / Check Out (mutually exclusive)
-                                    if (!hideButtons) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 4.dp),
-                                            horizontalArrangement = Arrangement.End
-                                        ) {
-                                            if (!checkedIn) {
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Row 2 (actually a Box): primary action isolated so it can't collapse
+                                    val primaryColors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        when (booking.status ) {
+                                            "CHECKED_IN" -> {
                                                 Button(
-                                                    onClick = { onCheckIn(b) },
-                                                    enabled = allowCheckIn
-                                                ) { Text("Check In") }
-                                            } else {
-                                                Button(
-                                                    onClick = { onCheckOut(b) },
+                                                    onClick = { onCheckOut(booking.bookingId) },
                                                     colors = ButtonDefaults.buttonColors(
-                                                        containerColor = MaterialTheme.colorScheme.secondary
-                                                    )
-                                                ) { Text("Check Out") }
+                                                        containerColor = MaterialTheme.colorScheme.primary,
+                                                        contentColor = MaterialTheme.colorScheme.onPrimary ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Icon(Icons.Default.ExitToApp, contentDescription = "Check out")
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Check Out")
+                                                }
+                                            }
+                                            "COMPLETED", "CANCELLED" -> {
+                                                // no primary action
+                                            }
+                                            else -> {
+                                                Button(
+                                                    onClick = { onCheckIn(booking.bookingId) },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = MaterialTheme.colorScheme.primary,
+                                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                ) {
+                                                    Icon(Icons.Default.Login, contentDescription = "Check in")
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Check In")
+                                                }
                                             }
                                         }
                                     }
@@ -406,34 +410,36 @@ fun BookingHistoryDialog(
 }
 
 
+/* ---------- Booking Dialog (make a new booking) ---------- */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BookingDialog(
     home: Home,
     onDismiss: () -> Unit,
-    onConfirm: (checkIn: Date, checkOut: Date, guests: Int, nights: Int) -> Unit
+    onConfirm: (checkInDate: Date, checkOutDate: Date, guests: Int, nights: Int) -> Unit
 ) {
-    // Use text states to avoid the “sticky 1 / always 20” issue
     var guestsText by rememberSaveable { mutableStateOf("1") }
     var nightsText by rememberSaveable { mutableStateOf("1") }
     var checkInDate by remember { mutableStateOf(Date()) }
 
-    // derived checkout
     val checkOutDate = remember(checkInDate, nightsText) {
-        val nights = nightsText.toIntOrNull()?.coerceIn(1, 30) ?: 1
+        val n = nightsText.toIntOrNull()?.coerceIn(1, 30) ?: 1
         Calendar.getInstance().apply {
             time = checkInDate
-            add(Calendar.DAY_OF_YEAR, nights)
+            add(Calendar.DAY_OF_YEAR, n)
         }.time
     }
 
     var showDatePicker by remember { mutableStateOf(false) }
     val fmt = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+    val price = home.pricePerNight ?: 0.0
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             shape = MaterialTheme.shapes.medium
         ) {
             Column(Modifier.padding(24.dp)) {
@@ -445,12 +451,7 @@ private fun BookingDialog(
                     Spacer(Modifier.width(8.dp)); Text("Guests:"); Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = guestsText,
-                        onValueChange = { text ->
-                            // allow empty while typing; clamp later on confirm
-                            if (text.length <= 2 && text.all { it.isDigit() } || text.isEmpty()) {
-                                guestsText = text
-                            }
-                        },
+                        onValueChange = { t -> if (t.length <= 2 && (t.all(Char::isDigit) || t.isEmpty())) guestsText = t },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.width(80.dp),
                         singleLine = true
@@ -464,11 +465,7 @@ private fun BookingDialog(
                     Spacer(Modifier.width(8.dp)); Text("Nights:"); Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = nightsText,
-                        onValueChange = { text ->
-                            if (text.length <= 2 && text.all { it.isDigit() } || text.isEmpty()) {
-                                nightsText = text
-                            }
-                        },
+                        onValueChange = { t -> if (t.length <= 2 && (t.all(Char::isDigit) || t.isEmpty())) nightsText = t },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.width(80.dp),
                         singleLine = true
@@ -476,7 +473,6 @@ private fun BookingDialog(
                 }
 
                 Spacer(Modifier.height(16.dp))
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
@@ -496,8 +492,8 @@ private fun BookingDialog(
                 Spacer(Modifier.height(16.dp))
 
                 val nights = nightsText.toIntOrNull()?.coerceIn(1, 30) ?: 1
-                val total = home.pricePerNight * nights
-                Text("Total: $${"%.2f".format(total)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                val total = price * nights
+                Text("Total: RM ${"%.2f".format(total)}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
 
                 Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -506,13 +502,11 @@ private fun BookingDialog(
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) { Text("Cancel") }
                     Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            val g = guestsText.toIntOrNull()?.coerceIn(1, 20) ?: 1
-                            val n = nightsText.toIntOrNull()?.coerceIn(1, 30) ?: 1
-                            onConfirm(checkInDate, checkOutDate, g, n)
-                        }
-                    ) { Text("Confirm Booking") }
+                    Button(onClick = {
+                        val g = guestsText.toIntOrNull()?.coerceIn(1, 20) ?: 1
+                        val n = nightsText.toIntOrNull()?.coerceIn(1, 30) ?: 1
+                        onConfirm(checkInDate, checkOutDate, g, n)
+                    }) { Text("Confirm Booking") }
                 }
             }
         }

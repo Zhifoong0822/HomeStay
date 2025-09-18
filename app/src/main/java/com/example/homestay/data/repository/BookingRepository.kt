@@ -7,7 +7,6 @@ import java.util.Date
 interface BookingRepository {
     suspend fun createBooking(booking: Booking): Result<Unit>
     suspend fun updateBooking(booking: Booking): Result<Unit>
-    suspend fun updateBookingStatus(bookingId: String, status: String): Result<Unit>
 
     suspend fun cancelBooking(bookingId: String): Result<Unit>
     suspend fun rescheduleBooking(
@@ -19,6 +18,8 @@ interface BookingRepository {
     fun getBookingsByUser(userId: String): Flow<List<Booking>>
     fun getBookingsByHost(hostId: String): Flow<List<Booking>>
     fun getBookingsByHome(homeId: String): Flow<List<Booking>>
+    suspend fun deleteBooking(bookingId: String): Result<Unit>
+    suspend fun updateStatus(bookingId: String, status: String): Result<Unit>
 
     suspend fun getBookingById(bookingId: String): Booking?
 

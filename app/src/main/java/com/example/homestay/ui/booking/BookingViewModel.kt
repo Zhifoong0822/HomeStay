@@ -18,14 +18,25 @@ class BookingViewModel(
 
     // ---- Session ----
     private var userId: String? = null
-
     fun setCurrentUser(id: String) {
         if (userId == id) return
         userId = id
         loadUserBookings(id)
     }
-
     fun currentUserId(): String = userId.orEmpty()
+
+    private var hostId: String? = null
+    fun setCurrentHost(id: String) {
+        if (hostId == id) return
+        hostId = id
+        loadHostBookings(id)
+    }
+
+    fun currentHostId(): String = hostId.orEmpty()
+
+    private val _hostBookings = MutableStateFlow<List<Booking>>(emptyList())
+    val hostBookings: StateFlow<List<Booking>> = _hostBookings.asStateFlow()
+
 
     // ---- UI State ----
     private val _bookings = MutableStateFlow<List<Booking>>(emptyList())
@@ -62,24 +73,7 @@ class BookingViewModel(
         }
     }
 
-    fun loadHostBookings(forHostId: String) {
-        viewModelScope.launch {
-            _loading.value = true
-            try {
-                bookingRepository.getBookingsByHost(forHostId).collect { list ->
-                    _bookings.value = list
-                }
-            } catch (e: Exception) {
-                _error.value = "Failed to load host bookings: ${e.message}"
-            } finally {
-                _loading.value = false
-            }
-        }
-    }
-
-
     // ---- Commands ----
-
     /** Create a booking and refresh list on success. */
     suspend fun createBooking(booking: Booking): Result<Unit> {
         _loading.value = true
@@ -138,19 +132,74 @@ class BookingViewModel(
         }
     }
 
-
     /** Cancel an existing booking. */
     fun cancelBooking(bookingId: String) {
         val uid = userId ?: return
         viewModelScope.launch {
             _loading.value = true
             try {
-                val res = bookingRepository.cancelBooking(bookingId)
+                val res = bookingRepository.deleteBooking(bookingId)   // << delete, not mark cancelled
                 if (res.isSuccess) {
                     loadUserBookings(uid)
-                    message.tryEmit("Booking cancelled successfully")
+                    message.tryEmit("Booking cancelled")
                 } else {
                     _error.value = res.exceptionOrNull()?.message ?: "Failed to cancel booking"
+                }
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    fun loadHostBookings(forHostId: String? = hostId) {
+        val hid = forHostId
+        if (hid.isNullOrEmpty()) {
+            _error.value = "Host ID is missing. Cannot load bookings."
+            return
+        }
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                bookingRepository.getBookingsByHost(hid).collect { list ->
+                    _hostBookings.value = list
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to load host bookings: ${e.message}"
+            } finally {
+                _loading.value = false
+            }
+        }
+    }
+
+    /** Update the status of a booking (for host actions: Accept/Reject) */
+    fun updateBookingStatus(bookingId: String, newStatus: String) {
+        val hid = currentHostId()
+        if (hid.isEmpty()) return
+
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val booking = bookingRepository.getBookingById(bookingId)
+                if (booking != null) {
+                    // Only allow host to update their own booking
+                    if (booking.hostId != hid) {
+                        _error.value = "Cannot update booking that doesn't belong to this host"
+                        return@launch
+                    }
+
+                    val updatedBooking = booking.copy(
+                        status = newStatus,
+                        updatedAt = Date()
+                    )
+                    val res = bookingRepository.updateBooking(updatedBooking)
+                    if (res.isSuccess) {
+                        loadHostBookings(hid)
+                        message.tryEmit("Booking status updated to $newStatus")
+                    } else {
+                        _error.value = res.exceptionOrNull()?.message ?: "Failed to update status"
+                    }
+                } else {
+                    _error.value = "Booking not found"
                 }
             } catch (e: Exception) {
                 _error.value = e.message
@@ -160,34 +209,39 @@ class BookingViewModel(
         }
     }
 
-    fun updateBooking(booking: Booking) {
+
+    // BookingViewModel.kt  (inside class BookingViewModel)
+
+    fun checkIn(bookingId: String) {
         val uid = userId ?: return
         viewModelScope.launch {
             _loading.value = true
             try {
-                val res = bookingRepository.updateBooking(booking)
+                val res = bookingRepository.updateStatus(bookingId, "CHECKED_IN")
                 if (res.isSuccess) {
-                    // reload bookings depending on whether it’s guest or host
                     loadUserBookings(uid)
-                    message.tryEmit("Booking updated")
+                    message.tryEmit("Checked in successfully")
                 } else {
-                    _error.value = res.exceptionOrNull()?.message ?: "Failed to update booking"
+                    _error.value = res.exceptionOrNull()?.message ?: "Failed to check in"
                 }
-            } catch (e: Exception) {
-                _error.value = e.message
-            } finally {
-                _loading.value = false
-            }
+            } finally { _loading.value = false }
         }
     }
 
-
-    fun updateBookingStatus(booking: Booking, newStatus: String) {
-        val updated = booking.copy(
-            status = newStatus,
-            updatedAt = java.util.Date()
-        )
-        updateBooking(updated)
+    fun checkOut(bookingId: String) {
+        val uid = userId ?: return
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val res = bookingRepository.updateStatus(bookingId, "COMPLETED")
+                if (res.isSuccess) {
+                    loadUserBookings(uid)
+                    message.tryEmit("Checked out successfully")
+                } else {
+                    _error.value = res.exceptionOrNull()?.message ?: "Failed to check out"
+                }
+            } finally { _loading.value = false }
+        }
     }
 
     /** Reschedule dates for a booking. */
@@ -199,17 +253,16 @@ class BookingViewModel(
                 val res = bookingRepository.rescheduleBooking(bookingId, newCheckIn, newCheckOut)
                 if (res.isSuccess) {
                     loadUserBookings(uid)
-                    message.tryEmit("Booking rescheduled successfully")
+                    message.tryEmit("Booking rescheduled")
                 } else {
                     _error.value = res.exceptionOrNull()?.message ?: "Failed to reschedule booking"
                 }
-            } catch (e: Exception) {
-                _error.value = e.message
             } finally {
                 _loading.value = false
             }
         }
     }
+
 
     /** Mark booking as paid and (optionally) store a transaction id. */
     fun markBookingAsPaid(bookingId: String, transactionId: String? = null) {
@@ -225,7 +278,7 @@ class BookingViewModel(
                 )
                 if (res.isSuccess) {
                     loadUserBookings(uid)
-                    message.tryEmit("Payment recorded successfully")
+                    message.tryEmit("Payment recorded")
                 } else {
                     _error.value = res.exceptionOrNull()?.message ?: "Failed to update payment status"
                 }
@@ -237,12 +290,10 @@ class BookingViewModel(
         }
     }
 
-    /** Convenience wrapper used by UI to handle payments easily. */
+    /** Convenience wrapper used by your UI. */
     fun payBooking(bookingId: String, transactionId: String) {
         markBookingAsPaid(bookingId, transactionId)
     }
 
-    fun clearError() {
-        _error.value = null
-    }
+    fun clearError() { _error.value = null }
 }

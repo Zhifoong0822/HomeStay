@@ -59,9 +59,18 @@ class PropertyListingRepository(
 
     suspend fun getHomesByHostId(hostId: String) = homeDao.getHomesByHostId(hostId)
 
-    fun observeHomesByHostId(hostId: String): Flow<List<HomeEntity>> {
-        return homeDao.observeHomesByHostId(hostId)
+    // Make sure to import FirebaseFirestore
+    private val homesCollection = FirebaseFirestore.getInstance().collection("homes")
+
+    suspend fun getHomeNameById(homeId: String): String? {
+        return try {
+            val doc = homesCollection.document(homeId).get().await()
+            doc.getString("name") // Firestore field for home name
+        } catch (e: Exception) {
+            null
+        }
     }
+
 
     suspend fun getHomeWithDetails(id: String): HomeWithDetails? {
         val homeEntity = homeDao.getHomeById(id) ?: return null

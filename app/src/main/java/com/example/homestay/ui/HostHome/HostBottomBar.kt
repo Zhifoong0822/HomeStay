@@ -33,6 +33,7 @@ fun HostBottomBar(navController: NavController) {
                         launchSingleTop = true
                         restoreState = true
                     }
+
                 }
             },
             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Requests") },

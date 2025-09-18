@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import com.google.firebase.firestore.FirebaseFirestore
 import com.example.homestay.data.repository.FirestoreBookingRepository
-import com.example.homestay.ui.HostHome.HostBookingRequestsScreen
+import com.example.homestay.ui.HostHome.BookingRequestsScreen
 import com.example.homestay.ui.booking.UpdateBookingScreen
 import java.util.Date
 
@@ -175,7 +175,9 @@ class MainActivity : ComponentActivity() {
                     homeVM = homeVM,
                     propertyVM = propertyVM,
                     homestayRepo = homestayRepo,
-                    bookingVM = bookingVM
+                    bookingVM = bookingVM,
+                    propertyRepo = propertyRepo
+
                 )
             }
         }
@@ -190,7 +192,8 @@ fun HomeStayApp(
     homeVM: HomeWithDetailsViewModel,
     propertyVM: PropertyListingViewModel,
     homestayRepo: HomestayRepository,
-    bookingVM: BookingViewModel
+    bookingVM: BookingViewModel,
+    propertyRepo: PropertyListingRepository
 ) {
     val navController = rememberNavController()
     val uiState by authViewModel.uiState.collectAsState()
@@ -204,18 +207,20 @@ fun HomeStayApp(
                 HomeScreenWrapper(homeVM = homeVM, navController = navController)
             }
             composable(
-                route = "bookingRequests/{hostId}",
-                arguments = listOf(navArgument("hostId") { type = NavType.StringType })
+                route = "bookingRequests/{hostId}"
             ) { backStackEntry ->
-                val hostId = backStackEntry.arguments?.getString("hostId") ?: ""
-                HostBookingRequestsScreen(
-                    navController = navController,
-                    bookingVM = bookingVM
-                )
+                val hostId = backStackEntry.arguments?.getString("hostId") ?: return@composable
+                bookingVM.setCurrentHost(hostId)  // load bookings for this host
+                BookingRequestsScreen(navController = navController, bookingVM = bookingVM, propertyVM = propertyVM)
             }
 
-
-            composable("bookingHistory") { BookingHistoryScreen(navController) }
+            composable("bookingHistory") {
+                BookingHistoryScreen(
+                    navController = navController,
+                    bookingVM = bookingVM,
+                    homeRepo = propertyRepo // 👈 use repository directly
+                )
+            }
 
             // Add Home
             composable("addHome") {
@@ -283,7 +288,7 @@ fun HomeStayApp(
                 LoginScreen(
                     isTablet = isTablet,
                     viewModel = authViewModel,
-                    onSuccess = { navController.navigate(HomeStayScreen.HostHome.name) },
+                    onSuccess = { Log.d("LOGIN", "Login success, waiting for global navigation") },
                     onBackButtonClicked = { navController.navigate(HomeStayScreen.Logo.name) },
                     onForgotPasswordClicked = { navController.navigate(HomeStayScreen.ForgotPassword.name) }
                 )
@@ -326,7 +331,8 @@ fun HomeStayApp(
                 val bookingId = savedStateHandle?.get<String>("bookingId") ?: ""
                 val currentGuests = savedStateHandle?.get<Int>("currentGuests") ?: 1
                 val currentNights = savedStateHandle?.get<Int>("currentNights") ?: 1
-                val currentCheckInMillis = savedStateHandle?.get<Long>("currentCheckIn") ?: System.currentTimeMillis()
+                val currentCheckInMillis =
+                    savedStateHandle?.get<Long>("currentCheckIn") ?: System.currentTimeMillis()
                 val currentCheckInDate = Date(currentCheckInMillis)
 
                 UpdateBookingScreen(
@@ -340,7 +346,6 @@ fun HomeStayApp(
             }
 
 
-
             // Profile
             composable(HomeStayScreen.Profile.name) {
                 val isTablet = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact
@@ -349,7 +354,8 @@ fun HomeStayApp(
                     viewModel = authViewModel,
                     onBackButtonClicked = { navController.popBackStack() },
                     onEditProfileClicked = { navController.navigate(HomeStayScreen.EditProfile.name) },
-                    onLogoutClicked = { authViewModel.logout() },
+                    onLogoutClicked = { authViewModel.logout()
+                        navController.navigate(HomeStayScreen.Logo.name)},
                     onDeleteAccountClicked = { navController.navigate(HomeStayScreen.Logo.name) }
                 )
             }
@@ -361,37 +367,43 @@ fun HomeStayApp(
                     isTablet = isTablet,
                     viewModel = authViewModel,
                     onBackButtonClicked = { navController.popBackStack() },
-                    onSaveSuccess = { navController.navigate(HomeStayScreen.Profile.name) }
+                    onSaveSuccess = { navController.popBackStack() }
                 )
             }
         }
 
-        LaunchedEffect(uiState.isLoggedIn, uiState.userProfile, uiState.isAuthChecking) {
-            val profile = uiState.userProfile
-            if (uiState.isLoggedIn && profile != null) {
-                when (profile.role) {
-                    "Host" -> {
-                        Log.d("NAVIGATION", "Navigating as Host -> HostHome")
-                        navController.navigate(HomeStayScreen.HostHome.name) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                        homeVM.setHostId(profile.userId)
-                        propertyVM.setHostId(profile.userId)
-                    }
+        var lastLoginState by remember { mutableStateOf<Boolean?>(null) }
+        LaunchedEffect(uiState.isLoggedIn) {
+            if (lastLoginState == uiState.isLoggedIn) return@LaunchedEffect
+            lastLoginState = uiState.isLoggedIn
 
-                    "Guest" -> {
-                        Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
-                        bookingVM.setCurrentUser(profile.userId)
-                        bookingVM.loadUserBookings(profile.userId)
-                        navController.navigate(HomeStayScreen.ClientBrowse.name) {
-                            popUpTo(0) { inclusive = true }
+            if (uiState.isLoggedIn) {
+                val profile = uiState.userProfile
+                if (profile != null) {
+                    when (profile.role) {
+                        "Host" -> {
+                            Log.d("NAVIGATION", "Navigating as Host -> HostHome")
+                            navController.navigate(HomeStayScreen.HostHome.name) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                            homeVM.setHostId(profile.userId)
+                            propertyVM.setHostId(profile.userId)
                         }
-                    }
 
-                    else -> {
-                        Log.d("NAVIGATION", "Unknown role -> Logo")
-                        navController.navigate(HomeStayScreen.Logo.name) {
-                            popUpTo(0) { inclusive = true }
+                        "Guest" -> {
+                            Log.d("NAVIGATION", "Navigating as Guest -> ClientBrowse")
+                            bookingVM.setCurrentUser(profile.userId)
+                            bookingVM.loadUserBookings(profile.userId)
+                            navController.navigate(HomeStayScreen.ClientBrowse.name) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        }
+
+                        else -> {
+                            Log.d("NAVIGATION", "Unknown role -> Logo")
+                            navController.navigate(HomeStayScreen.Logo.name) {
+                                popUpTo(0) { inclusive = true }
+                            }
                         }
                     }
                 }
@@ -401,6 +413,6 @@ fun HomeStayApp(
                     popUpTo(0) { inclusive = true }
                 }
             }
-                }
-            }
         }
+    }
+}

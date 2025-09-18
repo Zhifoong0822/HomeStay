@@ -10,142 +10,117 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.example.homestay.HomeStayScreen
 import com.example.homestay.data.model.Booking
+import com.example.homestay.data.repository.PropertyListingRepository
 import com.example.homestay.ui.booking.BookingViewModel
+import com.example.homestay.ui.property.PropertyListingViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HostBookingRequestsScreen(
+fun BookingRequestsScreen(
     navController: NavController,
     bookingVM: BookingViewModel,
-) {
-    // Extract hostId from nav arguments
-    val hostId = navController.currentBackStackEntry
-        ?.arguments
-        ?.getString("hostId")
-        ?: ""
-
-    val bookings by bookingVM.bookings.collectAsStateWithLifecycle()
-    val loading by bookingVM.loading.collectAsStateWithLifecycle()
-    val error by bookingVM.error.collectAsStateWithLifecycle()
-
+    propertyVM: PropertyListingViewModel) {
+    val primaryColor = Color(0xFF446F5C)
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // Collect fire-and-forget messages
-    LaunchedEffect(Unit) {
-        bookingVM.message.collect { msg ->
-            snackbarHostState.showSnackbar(msg)
-        }
-    }
-
-    // Load bookings for this host
-    LaunchedEffect(hostId) {
-        if (hostId.isNotEmpty()) {
-            bookingVM.loadHostBookings(hostId)
-        }
-    }
+    val bookings by bookingVM.hostBookings.collectAsState(initial = emptyList())
+    val pendingBookings = bookings.filter { it.status == "PENDING" }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("📩 Booking Requests") },
+                title = { Text("📩 Booking Requests", color = Color.White) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = primaryColor),
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigate(HomeStayScreen.HostHome.name) }) {
+                    IconButton(onClick = { navController.navigateUp() }) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
                         )
                     }
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        bottomBar = { HostBottomBar(navController = navController) },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when {
-                loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                error != null -> Text(
-                    text = error ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-                else -> {
-                    val pendingBookings = bookings.filter { it.status == "PENDING" }
-                    if (pendingBookings.isEmpty()) {
-                        Text(
-                            "No booking requests",
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(pendingBookings, key = { it.bookingId }) { booking ->
-                                BookingRequestCard(
-                                    booking = booking,
-                                    onAccept = {
+
+        if (pendingBookings.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No pending booking requests")
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(pendingBookings, key = { it.bookingId }) { booking ->
+
+                    // State to hold the home name
+                    val homeName = remember(booking.homeId) { mutableStateOf("Loading...") }
+
+                    // Fetch home name asynchronously
+                    LaunchedEffect(booking.homeId) {
+                        val name = propertyVM.getHomeNameById(booking.homeId)
+                        homeName.value = name ?: "Unknown Home"
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Guest: ${booking.userId}", style = MaterialTheme.typography.titleMedium)
+                            Text("Homestay: ${homeName.value}")
+                            Text("Dates: ${booking.checkInDate} – ${booking.checkOutDate}")
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = {
                                         scope.launch {
-                                            bookingVM.updateBookingStatus(booking, "ACCEPTED")
+                                            bookingVM.updateBookingStatus(
+                                                booking.bookingId,
+                                                "CONFIRMED"
+                                            )
+                                            snackbarHostState.showSnackbar("Accepted booking for ${booking.userId}")
                                         }
                                     },
-                                    onReject = {
+                                    colors = ButtonDefaults.buttonColors(containerColor = primaryColor)
+                                ) { Text("Accept") }
+
+                                OutlinedButton(
+                                    onClick = {
                                         scope.launch {
-                                            bookingVM.updateBookingStatus(booking, "REJECTED")
+                                            bookingVM.updateBookingStatus(
+                                                booking.bookingId,
+                                                "CANCELLED"
+                                            )
+                                            snackbarHostState.showSnackbar("Rejected booking for ${booking.userId}")
                                         }
-                                    }
-                                )
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = primaryColor)
+                                ) { Text("Reject") }
                             }
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun BookingRequestCard(
-    booking: Booking,
-    onAccept: () -> Unit,
-    onReject: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Guest ID: ${booking.userId}", fontWeight = FontWeight.Bold)
-            Text("Home ID: ${booking.homeId}")
-            Text("Check-in: ${booking.checkInDate}")
-            Text("Check-out: ${booking.checkOutDate}")
-            Text("Guests: ${booking.numberOfGuests}")
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(onClick = onAccept) {
-                    Text("Accept")
-                }
-                OutlinedButton(onClick = onReject) {
-                    Text("Reject")
                 }
             }
         }

@@ -5,10 +5,18 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HomeDao {
+    data class HomeWithPriceRow(
+        val id: String,
+        val name: String,
+        val location: String,
+        val description: String,
+        val hostId: String,
+        val price: Double?        // nullable because LEFT JOIN
+    )
+
 
     @Query("SELECT * FROM home")
     suspend fun getAllHomes(): List<HomeEntity>
@@ -22,10 +30,6 @@ interface HomeDao {
 
     @Query("SELECT * FROM home WHERE hostId = :hostId")
     suspend fun getHomesByHostId(hostId: String): List<HomeEntity>
-
-
-    @Query("SELECT * FROM home WHERE hostId = :hostId")
-    fun observeHomesByHostId(hostId: String): Flow<List<HomeEntity>>
 
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

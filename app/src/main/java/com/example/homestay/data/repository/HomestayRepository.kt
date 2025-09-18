@@ -28,6 +28,8 @@ class HomestayRepository(
     fun getAllHomestays(): Flow<List<HomestayPrice>> =
         priceDao.getAllHomestays()
 
+
+
     suspend fun insertHomestay(homestay: HomestayPrice) =
         priceDao.insertHomestay(homestay)
 
@@ -60,6 +62,8 @@ class HomestayRepository(
     // --- Promotions ---
     fun getAllPromotions(): Flow<List<PromotionEntity>> =
         promotionDao.getAllPromotions()
+
+
 
 
     suspend fun insertPromotion(promotion: PromotionEntity) =

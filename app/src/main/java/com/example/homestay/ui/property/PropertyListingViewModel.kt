@@ -124,6 +124,10 @@ class PropertyListingViewModel(
         onDone(newId)
     }
 
+    suspend fun getHomeNameById(homeId: String): String? {
+        return repo.getHomeNameById(homeId)
+    }
+
     // ---- Host (cloud) ----
     fun addHomeToCloud(photoUris: List<Uri>, onDone: () -> Unit) {
         val name = draftName
