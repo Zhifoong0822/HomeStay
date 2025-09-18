@@ -74,6 +74,10 @@ class AuthViewModel(
     // Check if user is already logged in and load their profile
     private fun checkCurrentUser() {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = true
+            )
+
             dataStoreManager.isLoggedIn.collect { loggedIn ->
                 val currentUser = authRepository.getCurrentUser()
 
@@ -191,7 +195,7 @@ class AuthViewModel(
                                 val db = UserDatabase.getDatabase(context)
                                 val userDao = db.userDao()
                                 viewModelScope.launch(Dispatchers.IO) {
-                                    val safeRole = _signUpState.value.role
+                                    val safeRole = profile.role
                                     if (safeRole.isBlank()) {
                                         Log.e("AuthViewModel", "Skipping Room insert - role is empty")
                                         return@launch

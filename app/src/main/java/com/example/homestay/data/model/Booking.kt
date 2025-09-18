@@ -16,6 +16,7 @@ data class Booking(
     val pricePerNight: Double = 0.0,
     val status: String = "PENDING",          // PENDING, CONFIRMED, RESCHEDULED, CANCELLED
     val paymentStatus: String = "PENDING",   // PENDING, PAID, FAILED
+    val paymentMethod: String = "",          // e.g., CARD, PAYPAL, EWALLET, CASH
     val transactionId: String? = null,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date()

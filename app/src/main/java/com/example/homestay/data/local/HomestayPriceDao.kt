@@ -33,4 +33,3 @@ interface HomestayPriceDao {
     suspend fun deletePrice(price: HomestayPrice)
 }
 
-

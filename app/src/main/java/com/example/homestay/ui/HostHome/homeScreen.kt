@@ -95,7 +95,7 @@ fun HomeScreen(
         containerColor = Color(0xFFFEF9F3),
         bottomBar = {
             HostBottomBar(navController)
-            }
+        }
     ) { padding ->
 
         Column(

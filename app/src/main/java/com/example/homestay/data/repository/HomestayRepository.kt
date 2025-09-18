@@ -80,4 +80,3 @@ class HomestayRepository(
         promotionDao.insertPromotion(promo)
     }
 }
-

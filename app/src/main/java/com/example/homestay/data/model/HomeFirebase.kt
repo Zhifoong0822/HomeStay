@@ -16,6 +16,3 @@ data class Promotion(
     val description: String = "",
     val discountPercent: Int = 0
 )
-
-
-

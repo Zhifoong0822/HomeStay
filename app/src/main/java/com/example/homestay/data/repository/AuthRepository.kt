@@ -166,7 +166,7 @@ class AuthRepository(private val context: Context) {
     }
 
     suspend fun getUserFromLocal(): UserProfile? {
-        val entity = userDao.getLastUser() // <-- needs DAO function
+        val entity = userDao.getLastUser()
         return entity?.let {
             UserProfile(
                 userId = it.userId,

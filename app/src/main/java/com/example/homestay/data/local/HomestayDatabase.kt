@@ -32,4 +32,3 @@ abstract class HomestayDatabase : RoomDatabase() {
     }
 }
 
-
