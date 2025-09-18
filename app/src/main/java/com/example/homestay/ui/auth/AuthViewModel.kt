@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
@@ -48,16 +49,22 @@ class AuthViewModel(
     private val _signUpState = MutableStateFlow(SignUpState())
     val signUpState = _signUpState.asStateFlow()
 
+    private val _editProfileState = MutableStateFlow(EditProfileState())
+    val editProfileState = _editProfileState.asStateFlow()
+
     private var usernameCheckJob: Job? = null
 
     private val _resetPasswordState = MutableStateFlow(ResetPasswordState())
     val resetPasswordState = _resetPasswordState.asStateFlow()
 
-    private val _editProfileState = MutableStateFlow(EditProfileState())
-    val editProfileState = _editProfileState.asStateFlow()
-
     private val _shouldClearLoginForm = MutableStateFlow(false)
     val shouldClearLoginForm = _shouldClearLoginForm.asStateFlow()
+
+    private val _shouldClearSignUpForm = MutableStateFlow(false)
+    val shouldClearSignUpForm = _shouldClearSignUpForm.asStateFlow()
+
+    private val _shouldClearEditProfileForm = MutableStateFlow(false)
+    val shouldClearEditProfileForm = _shouldClearEditProfileForm.asStateFlow()
 
     // Initialize the ViewModel by checking current auth state
     init {
@@ -71,11 +78,30 @@ class AuthViewModel(
                 val currentUser = authRepository.getCurrentUser()
 
                 if (loggedIn && currentUser != null && currentUser.isEmailVerified) {
+                    dataStoreManager.setLoginStatus(true)
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = true,
                         isLoading = true
                     )
                     loadUserProfile(currentUser.uid)
+
+                } else if (loggedIn && currentUser == null) {
+                    //Fallback: try cached local user
+                    val localUser = authRepository.getUserFromLocal()
+                    if (localUser != null) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = true,
+                            userProfile = localUser,
+                            isLoading = false
+                        )
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoggedIn = false,
+                            userProfile = null,
+                            isLoading = false
+                        )
+                    }
+
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoggedIn = false,
@@ -135,6 +161,8 @@ class AuthViewModel(
             try {
                 when (val result = authRepository.login(email, password)) {
                     is AuthResult.Success -> {
+                        dataStoreManager.setLoginStatus(true)
+
                         _loginState.value = _loginState.value.copy(
                             isLoading = false,
                             successMessage = if (result.data != null) {
@@ -150,26 +178,41 @@ class AuthViewModel(
                         //Load profile either from Firebase or local
                         val uid = result.data?.uid
                         if (uid != null) {
-                            loadUserProfile(uid) // Firebase profile
+                            //Fetch Firestore profile directly (so we can use it immediately)
+                            val profileResult = authRepository.getUserProfile(uid)
+                            if (profileResult is AuthResult.Success && profileResult.data != null) {
+                                val profile = profileResult.data
+                                _uiState.value = _uiState.value.copy(
+                                    userProfile = profile,
+                                    isLoggedIn = true
+                                )
 
-                            // --- ROOM DB INSERT AFTER LOGIN ---
-                            result.data?.let { firebaseUser ->
+                                // Save to Room with profile values
                                 val db = UserDatabase.getDatabase(context)
                                 val userDao = db.userDao()
                                 viewModelScope.launch(Dispatchers.IO) {
+                                    val safeRole = _signUpState.value.role
+                                    if (safeRole.isBlank()) {
+                                        Log.e("AuthViewModel", "Skipping Room insert - role is empty")
+                                        return@launch
+                                    }
+
                                     val userEntity = UserEntity(
-                                        userId = firebaseUser.uid,
-                                        email = firebaseUser.email ?: "",
+                                        userId = uid,
+                                        email = profile.email,
                                         password = "",
-                                        username = _loginState.value.email, // fallback username
-                                        gender = "",
-                                        birthdate = "",
-                                        role = _signUpState.value.role,
+                                        username = profile.username,
+                                        gender = profile.gender,
+                                        birthdate = profile.birthdate,
+                                        role = safeRole,
                                         createdAt = System.currentTimeMillis(),
                                         updatedAt = System.currentTimeMillis()
                                     )
                                     userDao.insertUser(userEntity)
                                 }
+                            } else {
+                                // fallback if profile failed
+                                loadUserProfile(uid)
                             }
                         } else {
                             loadLocalUserProfile(email) // Local profile
@@ -282,29 +325,68 @@ class AuthViewModel(
         val username = _signUpState.value.username.trim()
         val gender = _signUpState.value.gender.trim()
         val birthdate = _signUpState.value.birthdate.trim()
+        val role = _signUpState.value.role
 
         var isValid = true
+
+        // Validate email
         if (email.isEmpty()) {
             _signUpState.value = _signUpState.value.copy(emailError = "Email cannot be empty")
             isValid = false
-        }
-        if (password.isEmpty()) {
-            _signUpState.value = _signUpState.value.copy(passwordError = "Password cannot be empty")
+        } else if (!authRepository.isValidEmail(email)) {
+            _signUpState.value = _signUpState.value.copy(emailError = "Please enter a valid email address")
             isValid = false
         }
-        if (confirmPassword.isEmpty()) {
-            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Confirm password cannot be empty")
-            isValid = false
-        }
-        if (password != confirmPassword) {
-            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Passwords do not match")
-            isValid = false
-        }
+
+        // Validate username
         if (username.isEmpty()) {
             _signUpState.value = _signUpState.value.copy(usernameError = "Username cannot be empty")
             isValid = false
+        } else if (username.length < 3) {
+            _signUpState.value = _signUpState.value.copy(usernameError = "Username must be at least 3 characters")
+            isValid = false
         }
-        if (!isValid) return
+
+        // Validate password
+        if (password.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(passwordError = "Password cannot be empty")
+            isValid = false
+        } else if (password.length < 6) {
+            _signUpState.value = _signUpState.value.copy(passwordError = "Password must be at least 6 characters")
+            isValid = false
+        }
+
+        // Validate confirm password
+        if (confirmPassword.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Confirm password cannot be empty")
+            isValid = false
+        } else if (password != confirmPassword) {
+            _signUpState.value = _signUpState.value.copy(confirmPasswordError = "Passwords do not match")
+            isValid = false
+        }
+
+        // Validate gender
+        if (gender.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(errorMessage = "Please select a gender")
+            isValid = false
+        }
+
+        // Validate birthdate
+        if (birthdate.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(errorMessage = "Please select your birthdate")
+            isValid = false
+        }
+
+        // Validate role
+        if (role.isEmpty()) {
+            _signUpState.value = _signUpState.value.copy(errorMessage = "Please select a role (Guest or Host)")
+            isValid = false
+        }
+
+        if (!isValid) {
+            Log.d("AuthViewModel", "Validation failed - not proceeding with signup")
+            return
+        }
 
         val request = SignUpRequest(
             email = email,
@@ -312,7 +394,7 @@ class AuthViewModel(
             username = username,
             gender = gender,
             birthdate = birthdate,
-            role = _signUpState.value.role
+            role = role
         )
 
         viewModelScope.launch {
@@ -333,11 +415,15 @@ class AuthViewModel(
                         //set shouldClearForm = true
                         markLoginFormForClearing()
 
-                        // Room DB insertion...
+                        //Room DB insertion
                         result.data?.let { firebaseUser ->
                             val db = UserDatabase.getDatabase(context)
                             val userDao = db.userDao()
                             viewModelScope.launch(Dispatchers.IO) {
+                                if (role.isBlank()) {
+                                    Log.e("AuthViewModel", "Skipping Room insert - role is empty")
+                                    return@launch
+                                }
                                 val userEntity = UserEntity(
                                     userId = firebaseUser.uid,
                                     email = firebaseUser.email ?: "",
@@ -345,7 +431,7 @@ class AuthViewModel(
                                     username = username,
                                     gender = gender,
                                     birthdate = birthdate,
-                                    role = _signUpState.value.role,
+                                    role = role,
                                     createdAt = System.currentTimeMillis(),
                                     updatedAt = System.currentTimeMillis()
                                 )
@@ -539,7 +625,6 @@ class AuthViewModel(
         }
     }
 
-    // Add a manual refresh function
     fun refreshUserProfile() {
         val currentUser = authRepository.getCurrentUser()
         if (currentUser != null) {
@@ -563,14 +648,6 @@ class AuthViewModel(
             )
 
             try {
-                if (updatedProfile.username.isBlank()) {
-                    _editProfileState.value = _editProfileState.value.copy(
-                        isLoading = false,
-                        errorMessage = "Username cannot be empty"
-                    )
-                    return@launch
-                }
-
                 val currentProfile = _uiState.value.userProfile
                 if (currentProfile == null) {
                     _editProfileState.value = _editProfileState.value.copy(
@@ -580,15 +657,27 @@ class AuthViewModel(
                     return@launch
                 }
 
-                // Check username availability if changed
+                // Check if username is actually changing
                 if (updatedProfile.username != currentProfile.username) {
-                    if (!authRepository.isUsernameAvailableForUser(updatedProfile.username, currentProfile.userId)) {
+                    Log.d("EditProfile", "Username IS changing - checking availability")
+
+                    if (updatedProfile.username.isBlank()) {
                         _editProfileState.value = _editProfileState.value.copy(
                             isLoading = false,
-                            errorMessage = "Username is already taken"
+                            errorMessage = "Username cannot be empty"
                         )
                         return@launch
                     }
+                    val available = authRepository.isUsernameAvailable(updatedProfile.username)
+                    if (!available) {
+                        _editProfileState.value = _editProfileState.value.copy(
+                            isLoading = false,
+                            errorMessage = "Username already taken"
+                        )
+                        return@launch
+                    }
+                } else {
+                    Log.d("EditProfile", "Username NOT changing - skipping check")
                 }
 
                 when (val result = authRepository.updateUserProfile(updatedProfile)) {
@@ -632,6 +721,18 @@ class AuthViewModel(
         }
     }
 
+    fun updateNewUsername(value: String) {
+        _editProfileState.update { it.copy(newUsername = value) }
+    }
+
+    fun updateNewGender(value: String) {
+        _editProfileState.update { it.copy(newGender = value) }
+    }
+
+    fun updateNewBirthdate(value: String) {
+        _editProfileState.update { it.copy(newBirthdate = value) }
+    }
+
     fun logout() {
         val currentUser = authRepository.getCurrentUser()
         viewModelScope.launch {
@@ -643,9 +744,12 @@ class AuthViewModel(
 
         // Mark that login form should be cleared next time
         _shouldClearLoginForm.value = true
+        _shouldClearSignUpForm.value = true
+        _shouldClearEditProfileForm.value = true
 
         // Clear everything
         clearErrors()
+        clearEditProfileForm()
         forceCleanState()
 
         _uiState.value = _uiState.value.copy(
@@ -657,6 +761,11 @@ class AuthViewModel(
     fun markLoginFormForClearing() {
         _shouldClearLoginForm.value = false
         Log.d("AuthViewModel", "Login form marked for clearing")
+    }
+
+    fun markSignUpFormForClearing() {
+        _shouldClearSignUpForm.value = false
+        Log.d("AuthViewModel", "Sign up form marked for clearing")
     }
 
     // Auth Exception Handling
@@ -685,24 +794,39 @@ class AuthViewModel(
     }
 
     fun clearSignUpForm() {
-        _signUpState.value = SignUpState(
-            email = "",
-            password = "",
-            confirmPassword = "",
-            username = "",
-            gender = "",
-            birthdate = "",
-            role = "",
-            emailError = null,
-            passwordError = null,
-            confirmPasswordError = null,
-            usernameError = null,
-            isLoading = false,
-            errorMessage = null,
-            successMessage = null,
-            isCheckingUsername = false,
-            isUsernameAvailable = null
-        )
+        _signUpState.update { currentState ->
+            currentState.copy(
+                email = "",
+                password = "",
+                confirmPassword = "",
+                username = "",
+                gender = "",
+                birthdate = "",
+                role = "",
+                emailError = null,
+                passwordError = null,
+                confirmPasswordError = null,
+                usernameError = null,
+                isLoading = false,
+                errorMessage = null,
+                successMessage = null,
+                isCheckingUsername = false,
+                isUsernameAvailable = null
+            )
+        }
+    }
+
+    fun clearEditProfileForm() {
+        _editProfileState.update { currentState ->
+            currentState.copy(
+                newUsername = "",
+                newGender = "",
+                newBirthdate = "",
+                errorMessage = null,
+                successMessage = null,
+                isLoading = false
+            )
+        }
     }
 
     fun clearErrors() {
@@ -727,12 +851,12 @@ class AuthViewModel(
         )
     }
 
-    fun clearResetPasswordMessages() {
-        _resetPasswordState.value = ResetPasswordState()
+    fun clearEditProfileSuccessMessage() {
+        _editProfileState.update { it.copy(successMessage = null) }
     }
 
-    fun clearEditProfileMessages() {
-        _editProfileState.value = EditProfileState()
+    fun clearResetPasswordMessages() {
+        _resetPasswordState.value = ResetPasswordState()
     }
 
     fun forceCleanState() {
@@ -741,7 +865,6 @@ class AuthViewModel(
             usernameCheckJob?.cancel()
             usernameCheckJob = null
 
-            // Reset all states with explicit empty values
             _loginState.value = LoginState(
                 email = "",
                 password = "",
@@ -759,7 +882,7 @@ class AuthViewModel(
                 username = "",
                 gender = "",
                 birthdate = "",
-                role = "guest",
+                role = "",
                 emailError = null,
                 passwordError = null,
                 confirmPasswordError = null,
@@ -772,9 +895,18 @@ class AuthViewModel(
             )
 
             _resetPasswordState.value = ResetPasswordState()
-            _editProfileState.value = EditProfileState()
+            _editProfileState.value = EditProfileState(
+                newUsername = "",
+                newGender = "",
+                newBirthdate = "",
+                errorMessage = null,
+                successMessage = null,
+                isLoading = false
+            )
 
             _shouldClearLoginForm.value = false
+            _shouldClearSignUpForm.value = false
+            _shouldClearEditProfileForm.value = false
 
             Log.d("AuthViewModel", "All forms force cleared")
             Log.d("AuthViewModel", "Login email after clear: '${_loginState.value.email}'")
@@ -844,6 +976,7 @@ class AuthViewModel(
                 )
                 // Mark that login form should be cleared
                 markLoginFormForClearing()
+                markSignUpFormForClearing()
 
                 Log.d("AuthViewModel", "=== DELETE ACCOUNT DEBUG SUCCESS ===")
 

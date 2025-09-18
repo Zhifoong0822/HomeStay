@@ -165,6 +165,22 @@ class AuthRepository(private val context: Context) {
         }
     }
 
+    suspend fun getUserFromLocal(): UserProfile? {
+        val entity = userDao.getLastUser() // <-- needs DAO function
+        return entity?.let {
+            UserProfile(
+                userId = it.userId,
+                username = it.username,
+                email = it.email,
+                gender = it.gender,
+                birthdate = it.birthdate,
+                role = it.role,
+                createdAt = it.createdAt,
+                updatedAt = it.updatedAt
+            )
+        }
+    }
+
     //Add local DB clear (logout or delete)
     suspend fun clearLocalUser(userId: String) {
         userDao.deleteUserById(userId)
@@ -205,21 +221,29 @@ class AuthRepository(private val context: Context) {
                 .get()
                 .await()
 
+            Log.d("AuthRepository", "Found ${querySnapshot.size()} document(s) with this username")
             // If no documents, username is available
             if (querySnapshot.isEmpty) {
+                Log.d("AuthRepository", "Username is available (no documents found)")
                 return true
             }
 
             // If only one document and it belongs to current user, username is available
             if (querySnapshot.size() == 1) {
                 val document = querySnapshot.documents[0]
-                return document.id == currentUserId
+                val docUserId = document.getString("userId") ?: ""
+                Log.d("AuthRepository", "Found document userId: $docUserId")
+
+                val available = docUserId == currentUserId
+                Log.d("AuthRepository", "Is username available for current user? $available")
+                return available
             }
 
+            Log.d("AuthRepository", "Username is taken by multiple users")
             // More than one document means username is taken by others
             return false
         } catch (e: Exception) {
-            android.util.Log.e("AuthRepository", "Error checking username availability", e)
+            Log.e("AuthRepository", "Error checking username availability", e)
             // If we can't check, assume it's not available to be safe
             false
         }
@@ -251,11 +275,18 @@ class AuthRepository(private val context: Context) {
     // Update user profile
     suspend fun updateUserProfile(userProfile: UserProfile): AuthResult<UserProfile> {
         return try {
+            val isAvailable = isUsernameAvailableForUser(userProfile.username, userProfile.userId)
+            if (!isAvailable) {
+                return AuthResult.Error(Exception("Username is already taken"))
+            }
+
             val updatedProfile = userProfile.copy(updatedAt = System.currentTimeMillis())
             firestore.collection(USERS_COLLECTION)
                 .document(userProfile.userId)
                 .set(updatedProfile)
                 .await()
+
+            saveUserToLocal(updatedProfile)
             AuthResult.Success(updatedProfile)
         } catch (e: Exception) {
             AuthResult.Error(e)
@@ -476,7 +507,6 @@ class AuthRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.d("AuthRepository", "Error checking email: ${e.message}")
             // Firebase doesn't always tell us if user doesn't exist for security reasons
-            // So this method isn't 100% reliable
             false
         }
     }

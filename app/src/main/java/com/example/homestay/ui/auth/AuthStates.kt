@@ -8,6 +8,7 @@ data class AuthUiState(
     val isLoggedIn: Boolean = false,
     val userProfile: UserProfile? = null,
     val isLoading: Boolean = false,
+    val isAuthChecking: Boolean = true,
     val errorMessage: String? = null,
     val successMessage: String? = null
 )
@@ -29,7 +30,7 @@ data class SignUpState(
     val username: String = "",
     val gender: String = "",
     val birthdate: String = "",
-    val role: String = "Guest",
+    val role: String = "",
     val emailError: String? = null,
     val passwordError: String? = null,
     val confirmPasswordError: String? = null,
@@ -48,6 +49,9 @@ data class ResetPasswordState(
 )
 
 data class EditProfileState(
+    val newUsername: String = "",
+    val newGender: String = "",
+    val newBirthdate: String = "",
     val isLoading: Boolean = false,
     val successMessage: String? = null,
     val errorMessage: String? = null
