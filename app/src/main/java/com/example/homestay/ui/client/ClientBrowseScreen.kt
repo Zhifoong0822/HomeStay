@@ -175,12 +175,8 @@ fun ClientBrowseScreen(
                 homeById = homeById,
                 onDismiss = { showBookingHistory = false },
                 onCancel = { id -> scope.launch { bookingVm.cancelBooking(id) } },
-                onReschedule = { id ->
-                    scope.launch {
-                        val newIn = Date()
-                        val newOut = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 2) }.time
-                        bookingVm.rescheduleBooking(id, newIn, newOut)
-                    }
+                onReschedule = { id, newIn, newOut ->
+                    scope.launch { bookingVm.rescheduleBooking(id, newIn, newOut) }
                 },
                 onCheckIn = { id -> scope.launch { bookingVm.checkIn(id) } },
                 onCheckOut = { id -> scope.launch { bookingVm.checkOut(id) } }
@@ -277,16 +273,21 @@ private fun ClientHomeCard(
 
 /* ---------- Booking History Dialog ---------- */
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookingHistoryDialog(
     bookings: List<Booking>,
     homeById: Map<String, Home>,
     onDismiss: () -> Unit,
     onCancel: (String) -> Unit,
-    onReschedule: (String) -> Unit,
+    onReschedule: (id: String, newCheckIn: Date, newCheckOut: Date) -> Unit,
     onCheckIn: (String) -> Unit,
     onCheckOut: (String) -> Unit
 ) {
+    // --- state for reschedule date picker ---
+    var rescheduleTarget by remember { mutableStateOf<Booking?>(null) }
+    val datePickerState = rememberDatePickerState()
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
@@ -305,17 +306,13 @@ fun BookingHistoryDialog(
                         bookings.filter { it.status?.uppercase(Locale.getDefault()) != "CANCELLED" }
                     }
 
+                    val fmt = remember { SimpleDateFormat("EEE, dd MMM yyyy h:mm a", Locale.getDefault()) }
+
                     LazyColumn {
                         items(visibleBookings, key = { it.bookingId }) { booking ->
                             val home = homeById[booking.homeId]
                             val pricePerNight = home?.pricePerNight ?: booking.pricePerNight ?: 0.0
                             val total = pricePerNight * booking.nights
-
-
-                            val canModify = when ((booking.status ?: "").uppercase(Locale.getDefault())) {
-                                "COMPLETED", "CANCELLED", "CHECKED_IN" -> false  // change to taste
-                                else -> true
-                            }
 
                             Card(
                                 modifier = Modifier
@@ -325,8 +322,8 @@ fun BookingHistoryDialog(
                                 Column(Modifier.padding(12.dp)) {
                                     Text("Booking ID: ${booking.bookingId}", fontWeight = FontWeight.Bold)
                                     if (home != null) Text("Home: ${home.name}")
-                                    Text("Check-in: ${booking.checkInDate}")
-                                    Text("Check-out: ${booking.checkOutDate}")
+                                    Text("Check-in: ${fmt.format(booking.checkInDate)}")
+                                    Text("Check-out: ${fmt.format(booking.checkOutDate)}")
                                     Text("Guests: ${booking.numberOfGuests}")
                                     Text("Nights: ${booking.nights}")
                                     Text("Price: RM ${"%.2f".format(pricePerNight)} / night")
@@ -334,72 +331,73 @@ fun BookingHistoryDialog(
 
                                     Spacer(Modifier.height(8.dp))
 
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)   // space between buttons
-                                    ) {
-                                        //cancel
-                                        FilledTonalButton(
-                                            onClick = { onCancel(booking.bookingId) },
-                                            enabled = canModify,
-                                            modifier =  Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.Cancel, contentDescription = "Cancel")
-                                            Spacer(Modifier.width(6.dp))
-                                            Text("Cancel")
-                                        }
+                                    // One button per line
+                                    val disabled = when ((booking.status ?: "").uppercase(Locale.getDefault())) {
+                                        "CHECKED_IN", "COMPLETED", "CANCELLED" -> true
+                                        else -> false
+                                    }
 
-                                        //reschedule
-                                        FilledTonalButton(
-                                            onClick = { onReschedule(booking.bookingId) },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            enabled = canModify,
-                                        ) {
-                                            Icon(Icons.Default.EventRepeat, contentDescription = "Reschedule")
-                                            Spacer(Modifier.width(6.dp))
-                                            Text("Reschedule")
-                                        }
+                                    // Cancel
+                                    FilledTonalButton(
+                                        onClick = { onCancel(booking.bookingId) },
+                                        enabled = !disabled,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Cancel, contentDescription = "Cancel")
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Cancel")
                                     }
 
                                     Spacer(Modifier.height(8.dp))
 
-                                    // Row 2 (actually a Box): primary action isolated so it can't collapse
-                                    val primaryColors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
+                                    // Reschedule: open date picker
+                                    FilledTonalButton(
+                                        onClick = {
+                                            rescheduleTarget = booking
+                                            // initialize picker with current check-in date
+                                            datePickerState.selectedDateMillis = booking.checkInDate.time
+                                        },
+                                        enabled = !disabled,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.EventRepeat, contentDescription = "Reschedule")
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Reschedule")
+                                    }
 
-                                    Box(modifier = Modifier.fillMaxWidth()) {
-                                        when (booking.status ) {
-                                            "CHECKED_IN" -> {
-                                                Button(
-                                                    onClick = { onCheckOut(booking.bookingId) },
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = MaterialTheme.colorScheme.primary,
-                                                        contentColor = MaterialTheme.colorScheme.onPrimary ),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Icon(Icons.Default.ExitToApp, contentDescription = "Check out")
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text("Check Out")
-                                                }
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Primary
+                                    when ((booking.status ?: "").uppercase(Locale.getDefault())) {
+                                        "CHECKED_IN" -> {
+                                            Button(
+                                                onClick = { onCheckOut(booking.bookingId) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.primary,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                                )
+                                            ) {
+                                                Icon(Icons.Default.ExitToApp, contentDescription = "Check Out")
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Check Out")
                                             }
-                                            "COMPLETED", "CANCELLED" -> {
-                                                // no primary action
-                                            }
-                                            else -> {
-                                                Button(
-                                                    onClick = { onCheckIn(booking.bookingId) },
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = MaterialTheme.colorScheme.primary,
-                                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                                    ),
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                ) {
-                                                    Icon(Icons.Default.Login, contentDescription = "Check in")
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text("Check In")
-                                                }
+                                        }
+                                        "COMPLETED", "CANCELLED" -> {
+                                            // no primary action
+                                        }
+                                        else -> {
+                                            Button(
+                                                onClick = { onCheckIn(booking.bookingId) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.primary,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                                )
+                                            ) {
+                                                Icon(Icons.Default.Login, contentDescription = "Check In")
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Check In")
                                             }
                                         }
                                     }
@@ -414,6 +412,34 @@ fun BookingHistoryDialog(
                     Text("Close")
                 }
             }
+        }
+    }
+
+    // --- DatePicker for reschedule ---
+    if (rescheduleTarget != null) {
+        DatePickerDialog(
+            onDismissRequest = { rescheduleTarget = null },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = rescheduleTarget ?: return@TextButton
+                    val selected = datePickerState.selectedDateMillis ?: return@TextButton
+
+                    // new check-in: selected date @ 15:00
+                    val newCheckIn = atTime(Date(selected), hour = 15, minute = 0)
+
+                    // new check-out: (selected date + nights) @ 12:00
+                    val newCheckOut = atTime(addDays(Date(selected), target.nights), hour = 12, minute = 0)
+
+                    onReschedule(target.bookingId, newCheckIn, newCheckOut)
+                    rescheduleTarget = null
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { rescheduleTarget = null }) { Text("Cancel") } }
+        ) {
+            DatePicker(
+                state = datePickerState,
+                showModeToggle = false
+            )
         }
     }
 }
@@ -536,4 +562,25 @@ private fun BookingDialog(
             DatePicker(state = state, showModeToggle = false)
         }
     }
+}
+
+
+private fun atTime(date: Date, hour: Int, minute: Int): Date {
+    val cal = Calendar.getInstance().apply {
+        time = date
+        set(Calendar.HOUR_OF_DAY, hour)
+        set(Calendar.MINUTE, minute)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.time
+}
+
+private fun addDays(date: Date, days: Int): Date {
+    val cal = Calendar.getInstance().apply {
+        time = date
+        add(Calendar.DAY_OF_YEAR, days)
+        // leave time as-is (midnight); caller can adjust with atTime()
+    }
+    return cal.time
 }
