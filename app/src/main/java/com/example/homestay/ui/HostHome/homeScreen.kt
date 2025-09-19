@@ -278,6 +278,7 @@ fun HomestayCard(
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavController) {
     val homes by homeVM.homesWithDetails.collectAsState()
@@ -291,19 +292,69 @@ fun HomeScreenWrapper(homeVM: HomeWithDetailsViewModel, navController: NavContro
         }
     }
 
-    HomeScreen(
-        homestays = homes,
-        onProfileClick = { navController.navigate(HomeStayScreen.Profile.name) },
-        onAddHomeClick = { navController.navigate("addHome") },
-        onEditClick = { homestay -> navController.navigate("editHome/${homestay.id}") },
-        onDeleteClick = { homestay ->
-            homeVM.deleteHomeCompletely(homestay.id)
-        },
-        onAddPromoClick = { homestay ->
-            val encodedName = URLEncoder.encode(homestay.baseInfo.name, "UTF-8")
-            navController.navigate("addPromo/${homestay.id}/$encodedName")
-        },
-        navController = navController
-    )
-}
+    val validHomes = homes.filter { it.baseInfo.name.isNotBlank() }
 
+    if (validHomes.isEmpty()) {
+        // ✅ Empty state UI
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("🏡 My Homestays") },
+                    actions = {
+                        Button(
+                            onClick = { navController.navigate(HomeStayScreen.Profile.name) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF446F5C),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Icon(Icons.Default.Person, contentDescription = "Profile", modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Profile", fontWeight = FontWeight.Medium)
+                        }
+                    }
+                )
+            },
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    onClick = { navController.navigate("addHome") },
+                    text = { Text("Add Home") },
+                    icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
+                    containerColor = Color(0xFF446F5C),
+                    contentColor = Color.White
+                )
+            },
+            containerColor = Color(0xFFFEF9F3),
+            bottomBar = { HostBottomBar(navController) }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No homestays yet. Add your first one!",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Gray
+                )
+            }
+        }
+    } else {
+        // ✅ Show normal homes list
+        HomeScreen(
+            homestays = validHomes,
+            onProfileClick = { navController.navigate(HomeStayScreen.Profile.name) },
+            onAddHomeClick = { navController.navigate("addHome") },
+            onEditClick = { homestay -> navController.navigate("editHome/${homestay.id}") },
+            onDeleteClick = { homestay -> homeVM.deleteHomeCompletely(homestay.id) },
+            onAddPromoClick = { homestay ->
+                val encodedName = URLEncoder.encode(homestay.baseInfo.name, "UTF-8")
+                navController.navigate("addPromo/${homestay.id}/$encodedName")
+            },
+            navController = navController
+        )
+    }
+}

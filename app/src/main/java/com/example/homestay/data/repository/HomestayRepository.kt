@@ -36,7 +36,7 @@ class HomestayRepository(
     suspend fun updateHomestay(homestay: HomestayPrice) =
         priceDao.updatePrice(homestay)
 
-    suspend fun getPromotionForHome(homeId: String): PromotionEntity? {
+    fun getPromotionForHome(homeId: String): Flow<PromotionEntity?> {
         return promotionDao.getPromotionForHome(homeId)
     }
 

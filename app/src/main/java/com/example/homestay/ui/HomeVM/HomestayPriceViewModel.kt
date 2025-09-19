@@ -57,16 +57,30 @@ class HomeWithDetailsViewModel(
 
                 val localHomesWithDetails: List<HomeWithDetails> = localHomes.map { home ->
                     val price = homestayRepo.getPriceForHome(home.id)?.price
-                    val promo = homestayRepo.getPromotionForHome(home.id)
+
+                    // ⬇️ Start listening to promotion changes
+                    var promoEntity: PromotionEntity? = null
+                    homestayRepo.getPromotionForHome(home.id)
+                        .onEach { promo ->
+                            // Whenever promo changes, update _homesWithDetails
+                            val updated = _homesWithDetails.value.toMutableList()
+                            val idx = updated.indexOfFirst { it.id == home.id }
+                            if (idx >= 0) {
+                                updated[idx] = updated[idx].copy(promotion = promo)
+                                _homesWithDetails.value = updated
+                            }
+                        }
+                        .launchIn(viewModelScope)
 
                     HomeWithDetails(
                         id = home.id,
                         baseInfo = home.toHome(),
                         price = price,
-                        promotion = promo,
+                        promotion = promoEntity, // initial null, but Flow will update later
                         checkStatus = null
                     )
                 }
+
 
                 // --- 2. Load from Firebase ---
                 val firebaseHomes = firebaseRepo.getHomesFromFirebase()
@@ -111,12 +125,6 @@ class HomeWithDetailsViewModel(
         hostId = hostId
     )
 
-    // --- Price operations ---
-    fun updatePrice(homeId: String, newPrice: Double) {
-        viewModelScope.launch {
-            homestayRepo.insertPrice(HomestayPrice(homeId = homeId, price = newPrice))
-        }
-    }
 
     fun deleteHomeCompletely(homeId: String) {
         viewModelScope.launch {
@@ -135,14 +143,15 @@ class HomeWithDetailsViewModel(
 
     fun addOrUpdatePromotionWithFirebase(homeId: String, desc: String, discount: Int) {
         viewModelScope.launch {
-            homestayRepo.replacePromotionForHomestay(
-                homeId,
-                PromotionEntity(homeId = homeId, description = desc, discountPercent = discount)
-            )
+            val promoEntity = PromotionEntity(homeId = homeId, description = desc, discountPercent = discount)
 
+            // Save to Room (this triggers Flow collector already set up in loadHostHomes)
+            homestayRepo.replacePromotionForHomestay(homeId, promoEntity)
+
+            // Save to Firebase
             val homeWithDetails = propertyRepo.getHomeWithDetails(homeId)
             if (homeWithDetails != null) {
-                val promoModel = Promotion(description = desc, discountPercent = discount)
+                val promoModel = Promotion(desc, discount)
                 val homeFirebase = HomeFirebase(
                     id = homeWithDetails.id,
                     name = homeWithDetails.baseInfo.name,
@@ -154,8 +163,13 @@ class HomeWithDetailsViewModel(
                 )
                 firebaseRepo.addHomeToFirebase(homeFirebase)
             }
+
+            // 🚨 Don’t manually patch _homesWithDetails
+            // The Flow collector in loadHostHomes() will update automatically
         }
     }
+
+
 
     fun syncHomesFromFirebase() {
         viewModelScope.launch {
@@ -194,55 +208,11 @@ class HomeWithDetailsViewModel(
         }
     }
 
-    fun addHome(
-        name: String,
-        location: String,
-        description: String,
-        hostId: String,
-        onAdded: (String) -> Unit
-    ) {
-        viewModelScope.launch {
-            val newHome = Home(
-                id = java.util.UUID.randomUUID().toString(),
-                name = name,
-                location = location,
-                description = description,
-                hostId = hostId
-            )
-            propertyRepo.addHome(newHome)
-            onAdded(newHome.id)
-        }
-    }
-
-    fun addHomeWithId(home: Home, price: Double?, onComplete: (String) -> Unit) {
-        val newHome = home.copy(id = home.id.ifBlank { generateHomeId() })
-        viewModelScope.launch {
-            propertyRepo.addOrUpdateHome(newHome)
-            if (price != null) homestayRepo.insertPrice(HomestayPrice(homeId = newHome.id, price = price))
-            onComplete(newHome.id)
-        }
-    }
 
     private fun generateHomeId(): String {
         return "home_" + System.currentTimeMillis()
     }
 
-    fun updateHome(updated: Home, newPrice: Double? = null) {
-        viewModelScope.launch {
-            propertyRepo.addOrUpdateHome(updated)
-            if (newPrice != null) {
-                homestayRepo.insertPrice(HomestayPrice(homeId = updated.id, price = newPrice))
-            }
-        }
-    }
-
-    fun removeHome(id: String) {
-        viewModelScope.launch { propertyRepo.removeHome(id) }
-    }
-
-    fun toggleCheckInOut(homeId: String, userId: String) {
-        viewModelScope.launch { propertyRepo.toggleCheckInOut(homeId, userId) }
-    }
 
     fun addOrUpdateHomeInList(home: HomeWithDetails) {
         val currentList = _homesWithDetails.value.toMutableList()

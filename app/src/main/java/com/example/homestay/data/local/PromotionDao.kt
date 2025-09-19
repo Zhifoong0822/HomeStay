@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface PromotionDao {
 
     @Query("SELECT * FROM promotions WHERE homeId = :homeId LIMIT 1")
-    suspend fun getPromotionForHome(homeId: String): PromotionEntity?
+    fun getPromotionForHome(homeId: String): Flow<PromotionEntity?>
 
     @Query("SELECT * FROM promotions")
     fun getAllPromotions(): Flow<List<PromotionEntity>>

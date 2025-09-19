@@ -75,15 +75,18 @@ class PropertyListingRepository(
     suspend fun getHomeWithDetails(id: String): HomeWithDetails? {
         val homeEntity = homeDao.getHomeById(id) ?: return null
         val price = homestayPriceDao.getPriceForHome(id)?.price
-        val promotion = promotionDao.getPromotionForHome(id)
+        val promotion = promotionDao.getPromotionForHome(id).firstOrNull()
         return HomeWithDetails(
             id = homeEntity.id,
             baseInfo = homeEntity.toHome(),
             price = price,
             promotion = promotion,
             checkStatus = null
+
         )
     }
+
+
 
     // ---------------- Firestore + Storage ----------------
 
