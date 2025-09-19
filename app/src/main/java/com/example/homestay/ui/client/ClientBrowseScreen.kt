@@ -42,6 +42,7 @@ fun ClientBrowseScreen(
     @Suppress("UNUSED_PARAMETER") onBottomExplore: () -> Unit, // kept for compatibility
     onBottomProfile: () -> Unit
 ) {
+
     val homes by vm.homesCloud.collectAsState(initial = emptyList())
     val bookings by bookingVm.bookings.collectAsState(initial = emptyList())
 
@@ -310,6 +311,12 @@ fun BookingHistoryDialog(
                             val pricePerNight = home?.pricePerNight ?: booking.pricePerNight ?: 0.0
                             val total = pricePerNight * booking.nights
 
+
+                            val canModify = when ((booking.status ?: "").uppercase(Locale.getDefault())) {
+                                "COMPLETED", "CANCELLED", "CHECKED_IN" -> false  // change to taste
+                                else -> true
+                            }
+
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -334,6 +341,7 @@ fun BookingHistoryDialog(
                                         //cancel
                                         FilledTonalButton(
                                             onClick = { onCancel(booking.bookingId) },
+                                            enabled = canModify,
                                             modifier =  Modifier.fillMaxWidth()
                                         ) {
                                             Icon(Icons.Default.Cancel, contentDescription = "Cancel")
@@ -344,7 +352,8 @@ fun BookingHistoryDialog(
                                         //reschedule
                                         FilledTonalButton(
                                             onClick = { onReschedule(booking.bookingId) },
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            enabled = canModify,
                                         ) {
                                             Icon(Icons.Default.EventRepeat, contentDescription = "Reschedule")
                                             Spacer(Modifier.width(6.dp))

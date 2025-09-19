@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
-
+import com.example.homestay.data.model.HomeFirebase
 class PropertyListingRepository(
     private val homeDao: HomeDao,
     private val homestayPriceDao: HomestayPriceDao,
@@ -147,7 +147,7 @@ class PropertyListingRepository(
                     close(err)
                     return@addSnapshotListener
                 }
-                val list = snap?.documents?.map { doc ->
+                val list = snap?.documents?.mapNotNull { doc ->
                     val id = doc.getString("id") ?: doc.id
                     val hostId = doc.getString("hostId").orEmpty()
                     val name = doc.getString("name").orEmpty()
@@ -160,6 +160,7 @@ class PropertyListingRepository(
                         ?: (doc.get("photoUris") as? List<*>)?.filterIsInstance<String>()
                         ?: emptyList()
 
+                    val hf = doc.toObject(HomeFirebase::class.java) ?: return@mapNotNull null
                     Home(
                         id = id,
                         name = name,
@@ -167,7 +168,9 @@ class PropertyListingRepository(
                         description = description,
                         hostId = hostId,
                         // map into existing UI field
-                        photoUris = imageUrls
+                        photoUris = imageUrls,
+                        pricePerNight = hf.price ?: 0.0
+
                     )
                 } ?: emptyList()
                 trySend(list)
