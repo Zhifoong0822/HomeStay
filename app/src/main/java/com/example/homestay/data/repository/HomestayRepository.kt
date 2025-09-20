@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class HomestayRepository(
     private val priceDao: HomestayPriceDao,
@@ -19,9 +20,12 @@ class HomestayRepository(
     val prices: StateFlow<List<HomestayPrice>> = _prices.asStateFlow()
 
     init {
-        // Initialize from Room
-        priceDao.getAllHomestays().map { _prices.value = it }
+        // Properly collect prices into _prices
+        kotlinx.coroutines.GlobalScope.launch {
+            priceDao.getAllHomestays().collect { _prices.value = it }
+        }
     }
+
 
 
     // --- Homestays ---
@@ -80,7 +84,6 @@ class HomestayRepository(
 
 
     suspend fun replacePromotionForHomestay(homeId: String, promo: PromotionEntity) {
-        promotionDao.deletePromotionsForHome(homeId)
         promotionDao.insertPromotion(promo)
     }
 }

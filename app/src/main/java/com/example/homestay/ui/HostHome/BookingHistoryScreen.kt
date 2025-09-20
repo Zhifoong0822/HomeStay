@@ -57,16 +57,7 @@ fun BookingHistoryScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = brandColor,
                     titleContentColor = Color.White
-                ),
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
-                    }
-                }
+                )
             )
         },
         bottomBar = { HostBottomBar(navController = navController) },

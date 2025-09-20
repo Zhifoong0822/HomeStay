@@ -37,15 +37,6 @@ fun BookingRequestsScreen(
             TopAppBar(
                 title = { Text("📩 Booking Requests", color = Color.White) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = primaryColor),
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color.White
-                        )
-                    }
-                }
             )
         },
         bottomBar = { HostBottomBar(navController = navController) },

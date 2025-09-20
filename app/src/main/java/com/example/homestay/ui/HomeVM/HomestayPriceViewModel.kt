@@ -28,17 +28,61 @@ class HomeWithDetailsViewModel(
     private val _hostHomes = MutableStateFlow<List<HomeEntity>>(emptyList())
     val hostHomes: StateFlow<List<HomeEntity>> = _hostHomes
 
+
     init {
-        // Automatically load homes whenever hostId is set (including first login)
+        // React to hostId changes
         _hostId
-            .filterNotNull()               // ignore null hostIds
-            .distinctUntilChanged()        // only react to changes
+            .filterNotNull()
+            .distinctUntilChanged()
             .onEach { hostId ->
                 Log.d("DEBUG_HOMES", "HostId detected: $hostId")
-                loadHostHomes(hostId)
+                observeHomesAndPromotions(hostId)
             }
-            .launchIn(viewModelScope)      // launches immediately
+            .launchIn(viewModelScope)
     }
+
+    /**
+     * Observe homes (local + Firebase) and promotions together
+     */
+    private fun observeHomesAndPromotions(hostId: String) {
+        viewModelScope.launch {
+            // Collect homes + promotions together
+            combine(
+                flow { emit(propertyRepo.getHomesByHostId(hostId)) }, // one-shot homes from Room
+                homestayRepo.getAllPromotions()                       // continuous promotions
+            ) { homes, promotions ->
+
+                // Map homes to HomeWithDetails and inject matching promo
+                val localHomesWithDetails = homes.map { home ->
+                    val price = homestayRepo.getPriceForHome(home.id)?.price
+                    val promo = promotions.find { it.homeId == home.id }
+
+                    HomeWithDetails(
+                        id = home.id,
+                        baseInfo = home.toHome(),
+                        price = price,
+                        promotion = promo,
+                        checkStatus = null
+                    )
+                }
+
+                // Pull Firebase homes too
+                val firebaseHomes = firebaseRepo.getHomesFromFirebase()
+                val firebaseHomesWithDetails = firebaseHomes
+                    .filter { it.hostId == hostId }
+                    .map { it.toHomeWithDetails() }
+
+                // Combine and remove duplicates
+                (localHomesWithDetails + firebaseHomesWithDetails)
+                    .distinctBy { it.id }
+            }
+                .collect { merged ->
+                    _homesWithDetails.value = merged
+                    Log.d("DEBUG_HOMES", "Homes updated: ${merged.size}")
+                }
+        }
+    }
+
 
     fun clearHomes() {
         _homesWithDetails.value = emptyList()
